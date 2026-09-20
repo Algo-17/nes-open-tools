@@ -1,0 +1,37 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+*.coverage
+
+# Virtual environments
+.venv
+
+# Downloaded developer tool binaries (golf-biome)
+/.tools/
+
+# Sensitive files
+*.nes
+*.mlb
+*.nsf
+.env
+.env.*
+
+# Randomizer site database
+/golf_site.db
+/golf_site.db-wal
+/golf_site.db-shm
+/site-screenshots/
+
+# AI stuff lmao
+*.skill
+
+# Vanilla course data and the renders made from it: golf-rehydrate rebuilds them from
+# the ROMs. Only the directory markers are committed.
+/courses/**
+!/courses/**/
+!/courses/**/.gitkeep
+/rangefinder/

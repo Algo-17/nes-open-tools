@@ -1,0 +1,161 @@
+[project]
+name = "nes-open-tools"
+version = "0.1.0"
+description = "Reverse engineering work/hacking/tooling for NES Open Tournament Golf "
+license = "PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE"]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.4.0",
+    "py65>=1.2.0",
+    "pillow>=12.0.0",
+    "plyer>=2.1.0",
+    "pygame>=2.6.1",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.53.0",
+    "jinja2>=3.1.6",
+    "markdown-it-py>=4.0.0",
+    "python-multipart>=0.0.20",
+    "httpx2>=2.13.0",
+    "itsdangerous>=2.2.0",
+]
+
+[project.scripts]
+# Course editor
+golf-editor = "editor.main:main"
+
+# Course data: rehydrate, dump, write, render
+golf-rehydrate = "tools.rehydrate:main"
+golf-dump = "tools.dump:main"
+golf-dump-jp = "tools.dump_jp_courses:main"
+golf-write = "tools.write:main"
+golf-visualize = "tools.visualize:main"
+golf-render-web = "tools.render_web:main"
+
+# Regenerate checked-in data/ files
+golf-extract-tables = "tools.data.extract_tables:main"
+golf-analyze-neighbors = "tools.data.analyze_neighbors:main"
+golf-analyze-greens-neighbors = "tools.data.analyze_greens_neighbors:main"
+golf-analyze-putting = "tools.data.analyze_putting_surface:main"
+golf-catalog-sync = "tools.data.catalog_sync:main"
+golf-curate = "tools.data.curate:main"
+
+# Utilities
+golf-hex2bin = "tools.hex2bin:main"
+golf-expand-dict = "tools.expand_dict:main"
+
+# Developer tooling
+golf-biome = "tools.dev.biome:main"
+golf-check = "tools.dev.check:main"
+
+# ROM patches
+golf-patch = "tools.patch:main"
+golf-randomize = "tools.randomize:main"
+
+# Randomizer site
+golf-site = "tools.site:main"
+golf-site-screenshot = "tools.site_screenshot:main"
+golf-site-strings = "tools.site_strings:main"
+golf-site-new-page = "tools.new_page:main"
+
+# Reverse-engineering research
+golf-rom-peek = "tools.research.rom_peek:main"
+golf-labels = "tools.research.labels:main"
+
+# Art round-trips
+golf-golfer-export = "tools.art.golfer_export:main"
+golf-signpost-import = "tools.art.signpost_import:main"
+
+# Music
+golf-export-music = "tools.music.export:main"
+
+# Scorecard QR
+golf-qr-preview = "tools.qr.preview:main"
+golf-qr-validate = "tools.qr.validate:main"
+golf-qr-tables = "tools.qr.tables:main"
+golf-qr-port = "tools.qr.port:main"
+golf-qr-credentials = "tools.qr.credentials:main"
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-n",
+    "auto",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=golf",
+    "--cov=editor",
+    "--cov=server",
+    "--cov-report=term-missing",
+]
+markers = [
+    "vanilla_data: reads course data or renders golf-rehydrate makes from the ROMs (set by the fixtures in tests/conftest.py)",
+]
+filterwarnings = [
+    # pygame 2.6.1 imports pkg_resources at import time; pygame-ce doesn't
+    "ignore:pkg_resources is deprecated as an API:UserWarning:pygame.pkgdata",
+]
+
+[tool.coverage.run]
+# sys.monitoring instead of the C tracer: same numbers, ~2.4x faster
+core = "sysmon"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "pyright>=1.1.407",
+    "ruff>=0.14.10",
+    "pyinstaller>=6.18.0",
+    "zxing-cpp>=3.1.1",
+    "opencv-python-headless>=5.0.0.93",
+    "qrcode>=8.2",
+    "playwright>=1.63.0",
+    "pytest-xdist>=3.8.0",
+    "djlint>=1.46.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["golf", "editor", "server", "tools"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", # pycodestyle errors
+    "F", # pyflakes
+    "I", # import sorting
+    "N", # pep-8 naming
+    "UP", # pyupgrade
+    "B", # flake8-bugbear (common bugs)
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # line too long (let autoformatting handle)
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.djlint]
+profile = "jinja"
+indent = 2
+max_line_length = 88
+preserve_blank_lines = true
+max_blank_lines = 1
+# J004/J018 want url_for() for static and internal links; the site writes plain paths.
+ignore = "J004,J018"

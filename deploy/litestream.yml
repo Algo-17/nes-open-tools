@@ -1,0 +1,21 @@
+# Litestream (v0.5) replication of the site's database to S3-compatible object storage.
+# Installed as /etc/litestream.yml; see docs/deployment.md. The storage credentials are
+# not here: LITESTREAM_ACCESS_KEY_ID and LITESTREAM_SECRET_ACCESS_KEY come from
+# /etc/litestream.env through deploy/litestream-credentials.conf.
+
+# A snapshot a day, and three weeks of them kept: any point in the last three weeks can
+# be restored.
+snapshot:
+  interval: 24h
+  retention: 504h
+
+dbs:
+  - path: /var/lib/golf-site/golf_site.db
+    replica:
+      type: s3
+      bucket: replace-me
+      path: golf-site
+      # For Backblaze B2, the bucket's S3 endpoint and the region in it, for example
+      # https://s3.us-west-004.backblazeb2.com and us-west-004
+      endpoint: replace-me
+      region: replace-me
