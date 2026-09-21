@@ -10,8 +10,6 @@ from golf.randomizer.roms import vanilla_rom
 from server.forms import (
     CLUBS_BANNED,
     CLUBS_OVER_MAX,
-    DISABLED_SOURCES,
-    FORM_SOURCES,
     INVALID,
     INVALID_NAME,
     MUSIC_CHOICES,
@@ -51,13 +49,12 @@ def test_the_default_form_submits_the_default_settings():
     settings = settings_from_state(
         FormState.from_form(FormData([*FormState.default().to_pairs()]))
     )
-    assert settings == Settings(sources=frozenset(FORM_SOURCES))
+    assert settings == Settings()
 
 
-def test_a_disabled_source_is_neither_offered_nor_accepted():
-    assert JP_ROM in DISABLED_SOURCES and JP_ROM not in FORM_SOURCES
-    assert JP_ROM not in FormState.default().sources
-    assert refusal(sources={US_ROM, JP_ROM}).reason == INVALID
+def test_both_vanilla_sources_are_enabled():
+    assert FormState.default().sources == {US_ROM, JP_ROM}
+    assert submit(sources={US_ROM, JP_ROM}).sources == frozenset({US_ROM, JP_ROM})
 
 
 def test_the_form_lists_every_par_music_and_club_but_the_putter():

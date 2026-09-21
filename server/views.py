@@ -14,7 +14,7 @@ from golf.randomizer.manifest import SOURCES, required_roms
 from golf.randomizer.music import TRACKS, Track
 from golf.randomizer.roms import VanillaRom, vanilla_rom
 
-from .forms import FORM_SOURCES, MUSIC_CHOICES, PARS, RULE_CLUBS, DownloadState
+from .forms import MUSIC_CHOICES, PARS, RULE_CLUBS, DownloadState
 from .rounds import Round, VoidedRound
 from .seeds import SeedRow
 
@@ -57,7 +57,7 @@ class GenerateOptions:
 def generate_options() -> GenerateOptions:
     return GenerateOptions(
         pars=PARS,
-        sources=tuple(vanilla_rom(source) for source in FORM_SOURCES),
+        sources=tuple(vanilla_rom(source) for source in SOURCES),
         music=tuple(
             MusicOption(
                 slug, vanilla_rom(TRACKS[slug].rom).title, track_course(TRACKS[slug])

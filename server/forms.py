@@ -11,9 +11,6 @@ problem for the template to show. A download submission is a `DownloadState`, ch
 
 The mercy point and excluded tags are not on the form: a seed from the site takes their
 `Settings` defaults.
-
-`DISABLED_SOURCES` withholds a source ROM: the form neither offers it nor accepts it in a
-submission, while the library still generates from it.
 """
 
 from collections.abc import Iterable
@@ -29,7 +26,6 @@ from golf.core.patches.sram_defaults import (
     parse_club,
 )
 from golf.randomizer.build import BuildError, PlayerOptions
-from golf.randomizer.catalog import JP_ROM
 from golf.randomizer.layout import COUNTS
 from golf.randomizer.manifest import SOURCES, ClubRules, ManifestError, Settings
 from golf.randomizer.music import RANDOM, TRACKS
@@ -40,10 +36,6 @@ PARS = tuple(sorted(COUNTS, reverse=True))
 #: every club a rule can name: the putter is always allowed and never listed
 RULE_CLUBS = tuple(club for club in Club if club != Club.PT)
 MUSIC_CHOICES = (RANDOM, *TRACKS)
-#: sources the site withholds for now: a seed drawing Mario Open holes misbehaves in play
-DISABLED_SOURCES = frozenset({JP_ROM})
-#: the sources the generate form offers, in the manifest's order
-FORM_SOURCES = tuple(source for source in SOURCES if source not in DISABLED_SOURCES)
 
 #: FormError reasons, each shown by its own strings key in generate.html
 NO_SOURCES = "no_sources"
@@ -83,7 +75,7 @@ class FormState:
         settings = Settings()
         return cls(
             par=str(settings.par),
-            sources=set(settings.sources) & set(FORM_SOURCES),
+            sources=set(settings.sources),
             allow_family_repeats=settings.allow_family_repeats,
             music=settings.music,
             clubs_max=str(settings.clubs.max),
@@ -156,7 +148,7 @@ def settings_from_state(state: FormState) -> Settings:
         raise FormError(INVALID, field="par")
     if not state.sources:
         raise FormError(NO_SOURCES)
-    if not state.sources <= set(FORM_SOURCES):
+    if not state.sources <= set(SOURCES):
         raise FormError(INVALID, field="sources")
     if state.music not in MUSIC_CHOICES:
         raise FormError(INVALID, field="music")

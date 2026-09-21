@@ -18,7 +18,7 @@ from server.app import SESSION_COOKIE, create_app
 from server.auth import DiscordClient, DiscordError, DiscordIdentity
 from server.builder import SeedBuilder
 from server.config import Config, ConfigError
-from server.forms import FORM_SOURCES, FormState
+from server.forms import FormState
 from server.migrations import MIGRATIONS
 from server.pages import PageCatalog
 from server.ratelimit import RateLimiter
@@ -309,9 +309,8 @@ def test_the_generate_form_offers_every_setting_with_its_default(client):
     assert re.search(r'href="/generate"\s+aria-current="page"', page)
     assert len(re.findall(r'name="par"', page)) == 3
     assert re.search(r'name="par"\s+value="72"\s+checked', page)
-    for source in FORM_SOURCES:
-        assert re.search(rf'name="sources"\s+value="{source}"\s+checked', page)
-    assert page.count('name="sources"') == len(FORM_SOURCES)
+    for rom in VANILLA_ROMS:
+        assert re.search(rf'name="sources"\s+value="{rom.id}"\s+checked', page)
     assert 'name="allow_family_repeats"' in page
     assert re.search(r'<option value="random"\s+selected', page)
     assert page.count("<option ") == 9
