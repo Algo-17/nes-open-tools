@@ -26,6 +26,11 @@ from .base import ROMPatch
 from .composite import CompositePatch
 from .course import CoursePatch
 from .course_theme import course_theme_patch
+from .green_slope_physics import (
+    DEFAULT_FRICTION,
+    DEFAULT_STRENGTH,
+    green_slope_physics_patch,
+)
 from .menu_trim import menu_trim_patch
 from .mercy_tap_in import mercy_tap_in_patches
 from .multi_bank import COURSE_MIRRORS_PATCH, MULTI_BANK_CODE_PATCH
@@ -106,6 +111,14 @@ class CourseParams:
 class CourseThemeParams:
     #: a US ROM course theme: $02 (US), $03 (Japan) or $04 (UK)
     music: int
+
+
+@dataclass(frozen=True)
+class GreenSlopePhysicsParams:
+    #: per-frame acceleration on the steepest slope tiles
+    strength: int = DEFAULT_STRENGTH
+    #: constant per-frame deceleration on the green; must exceed strength
+    friction: int = DEFAULT_FRICTION
 
 
 @dataclass(frozen=True)
@@ -433,6 +446,14 @@ PATCH_SPECS: dict[str, PatchSpec[Any, Any]] = {
                 params.player_name, params.clubs, params.bgm, params.sram_magic
             ),
             _report_sram_defaults,
+        ),
+        PatchSpec(
+            "green_slope_physics",
+            "Experimental: green slopes as constant acceleration (docs/green_slope_physics.md)",
+            GreenSlopePhysicsParams,
+            lambda ctx, params: green_slope_physics_patch(
+                params.strength, params.friction
+            ),
         ),
         PatchSpec(
             "putting_practice",

@@ -28,6 +28,7 @@ One line per document. Command-line tools are indexed in the top-level `README.m
 | [prize_money.md](prize_money.md) | The PRIZE MONEY clubhouse cutscene |
 | [hud_course_abbrev.md](hud_course_abbrev.md) | The course abbreviation in the in-game HUD |
 | [music_format.md](music_format.md) | The audio engine and track format, including inserting tracks |
+| [topspin.md](topspin.md) | Why the TOP 1 / TOP 2 spin settings have no effect on play |
 | [curiosity.md](curiosity.md) | Parked side findings, not yet investigated |
 
 ## Patches
@@ -40,6 +41,7 @@ One line per document. Command-line tools are indexed in the top-level `README.m
 | [seeded_wind.md](seeded_wind.md) | Pin positions and wind as a function of a build-time seed |
 | [practice_swing.md](practice_swing.md) | Practice swings that cost no stroke |
 | [putting_practice.md](putting_practice.md) | Starting every hole as a putt (design note, not shipped) |
+| [green_slope_physics.md](green_slope_physics.md) | Experimental: green slopes as constant acceleration rather than speed-scaled |
 | [prehole_signpost.md](prehole_signpost.md) | The pre-hole signpost card, and replacing its banner art |
 | [scorecard_qr.md](scorecard_qr.md) | End-of-round QR code submission, and its 6502 port |
 | [scorecard_qr_mask_sweep.md](scorecard_qr_mask_sweep.md) | Results of the QR mask/capture-condition validation sweep |
