@@ -89,7 +89,7 @@ recipes and the CLI. See `docs/patch_stack.md`.
   ROM, so about a third of the PRG is data in this format. See `docs/course_intro_scene.md`.
 
 **Inspecting the ROM**: use `golf-rom-peek` (logic in `golf/core/rom_analysis.py`) and its
-skill rather than one-off Python. The skill documents three ways a naive byte search or
+skill rather than one-off Python. The skill documents four ways a naive byte search or
 linear disassembly silently lies about this ROM; a "no references found" is never proof
 an address is dead.
 

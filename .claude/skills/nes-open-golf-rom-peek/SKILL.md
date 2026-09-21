@@ -5,7 +5,7 @@ description: >
   golf-rom-peek (tools/research/rom_peek.py, logic in golf/core/rom_analysis.py). Use
   whenever reading ROM bytes, disassembling 6502 code, tracing what calls a
   routine, checking whether an address or region is referenced, or looking for
-  reclaimable space in this project. Covers the subcommands, the three ways a
+  reclaimable space in this project. Covers the subcommands, the four ways a
   naive byte search or linear disassembly silently lies about this ROM, and the
   confidence discipline for null results - a "no references found" is never
   proof an address is dead.
@@ -54,7 +54,7 @@ reading anything.
 Use `golf-labels` (separate tool) to *add* labels; it writes to the sidecar by
 default. See the `nes-open-golf-label-conventions` skill for naming.
 
-## Three ways this ROM lies to a naive reading
+## Four ways this ROM lies to a naive reading
 
 These are the reason the tool exists. Each has burned a previous session.
 
@@ -126,6 +126,40 @@ Use `find-refs`, which covers `JSR` / `JMP` / `JMP (ind)`, relative branches,
 `ExecuteFarCall` inline targets, and every entry in the inline tables of all
 `DispatchInlineJumpTable` and `DispatchInlineJumpTableFF` call sites, in one
 command.
+
+### 4. A table is shorter than it looks, and over-running it usually looks fine
+
+Lookup tables here are packed in parallel `Lo`/`Hi` pairs with **zero slack**:
+`Hi` starts at the byte after `Lo`'s last entry, and real code usually starts
+at the byte after `Hi`'s. So an index past the end of `Lo` silently reads
+`Hi`, and an index past the end of `Hi` reads opcodes.
+
+This bites because several tables are indexed by a per-hole value that the
+vanilla courses never drive to the end of their own data. `ScrollLimit` tops
+out at 8 across the three shipped courses, so nobody noticed its tables hold
+10 entries — but a patched-in 60-row hole drives it to 16. Five separate
+table pairs have had to be expanded for exactly this reason; see
+`docs/wram_expansion.md` and `golf/core/patches/wram_expansion/`.
+
+**The over-run is almost always invisible.** The bytes just past a table are
+its sibling table or code, and those usually form a value that happens to
+behave — a threshold too large to ever fire, an offset merely wrong rather
+than catastrophic. Of the seven out-of-range `ScrollLimit` values the
+terrain-bottom tables could see, exactly one produced a visible bug; the
+other six played normally. "I tested the tallest hole and it worked" is not
+evidence a table is long enough, and neither is a clean playthrough.
+
+So when you find a table:
+
+- Get its length from where the **next** thing starts — the next label, the
+  next table's first entry, or the first byte of real code — not from how
+  many entries the game appears to use. `read` past the end and find where
+  the pattern breaks.
+- Work out the full range of its index, including values only reachable on
+  patched data, and compare that against the length you just measured.
+- Label it as a range (`golf-labels add prg 'START-END' Name`) so `disasm`
+  stops decoding it as code and the next agent can see the boundary without
+  re-deriving it.
 
 ## `disasm --routine`
 

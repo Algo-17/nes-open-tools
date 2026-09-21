@@ -132,7 +132,7 @@ table.
   - `ScrollThresholdHigh`: `$CA83`-`$CA92`
 - **Remaining - `$CA93`-`$CAFF` (109 bytes):** unused.
 
-### PRG `$3E4F9`-`$3E516` (CPU `$E4F9`-`$E516`, 30 bytes) - vacated, not yet reclaimed
+### PRG `$3E4F9`-`$3E516` (CPU `$E4F9`-`$E516`, 30 bytes)
 
 Former location of the vanilla `ViewOffsetToAddrLow`/`ViewOffsetToAddrHigh`/
 `ViewOffsetToAttrIndex` tables, relocated to `$CA40` above (see
@@ -140,14 +140,20 @@ Former location of the vanilla `ViewOffsetToAddrLow`/`ViewOffsetToAddrHigh`/
 `golf/core/patches/wram_expansion/view_offset_tables.py`). Confirmed via
 breakpoint testing (full playthrough of a long hole, including deliberate
 camera panning) that nothing reads this region once those patches are
-applied - every known caller has been redirected to `$CA40`.
+applied - every known caller has been redirected to `$CA40`. A static
+re-check agrees: after the relocation, no fixed-bank instruction anywhere
+references `$E4F9`, `$E503` or `$E50D`.
 
-Unlike the region above, this one still holds its original (now-dead) table
-bytes rather than `$FF` filler - the relocation patch never overwrote the
-old location, only the code that pointed at it. Available for reuse by a
-future patch if needed; would need a `BytePatch` (or extending
-`view_offset_tables.py`) whose `original` matches whatever the old table
-bytes still are at that point in the patch chain.
+Unlike the region above, this one holds its original (now-dead) table bytes
+rather than `$FF` filler - the relocation patch never overwrote the old
+location, only the code that pointed at it. A patch writing here needs an
+`original` matching those bytes at that point in the patch chain.
+
+- **Carved off - `$E4F9`-`$E509` (17 bytes):** relocated `TerrainBottomYHi`
+  table (read by the ball-position probe `$EDEA`, see "Ball-Position Probe"
+  below), expanded from the vanilla 10 entries to 17 to cover every
+  `ScrollLimit` a 60-row hole can have.
+- **Remaining - `$E50A`-`$E516` (13 bytes):** unused.
 
 ### PRG `$34F91`-`$34FA2` (CPU `$8F91`-`$8FA2`, bank `$0D`, 18 bytes) - vacated, not yet reclaimed
 
@@ -183,14 +189,21 @@ losing track of any one of these would be easy to do by accident.
 | `TerrainRowOffsetsHi` | Same, high byte | `$F69E` (fixed bank) | 48 entries | `$CA97` (fixed bank) | 60 entries |
 | `SpriteScreenOffsetLo` (proposed - no name found in disassembly yet) | `ViewVerticalOffset` -> sprite screen-Y adjustment (low), read by ball/flag/green/tee-block positioning code (`LD_8FCC`, `LD_8ED2`, and 2 more sites, all bank `$0D`) | `$8F21` (bank `$0D`) | 10 entries | `$8F21` (bank `$0D`, **unchanged** - grew in place) | 17 entries |
 | `SpriteScreenOffsetHi` (proposed) | Same, high byte | `$8F2B` (bank `$0D`) | 10 entries | `$CAD3` (fixed bank) | 17 entries |
+| `TerrainBottomYLo` (proposed - no name found in disassembly yet) | The hole's terrain height in pixels (low), compared against `BallY` by the ball-position probe `$EDEA` to decide whether the ball is still on the terrain | `$EFE2` (fixed bank) | 10 entries | `$EFE2` (fixed bank, **unchanged** - grew in place) | 17 entries |
+| `TerrainBottomYHi` (proposed) | Same, high byte | `$EFEC` (fixed bank) | 10 entries | `$E4F9` (fixed bank) | 17 entries |
 
-`ViewVerticalOffset` (0-16, **17** possible values, not 16 - see `sprite_screen_offset_tables.py` for why) is the common index across four of these five pairs; `TerrainRowOffsetsLo`/`Hi` is indexed by absolute terrain row (0-59) instead, which is why it didn't need the same off-by-one fix.
+Five of these tables are indexed by `ViewVerticalOffset` (0-16, **17** possible values, not 16 - see `sprite_screen_offset_tables.py` for why): `ViewOffsetToAddrLow`/`High`, `ViewOffsetToAttrIndex` and `SpriteScreenOffsetLo`/`Hi`. `ScrollThresholdLow`/`High` is indexed by a loop counter that stops one short of `ScrollLimit`, so 16 entries covers it. `TerrainBottomYLo`/`Hi` is indexed by `ScrollLimit` itself, which has the same 0-16 range as `ViewVerticalOffset`. `TerrainRowOffsetsLo`/`Hi` is indexed by absolute terrain row (0-59) instead, which is why it didn't need the same off-by-one fix.
 
 Free-space budget in `$CA40`-`$CAFF` (192 bytes): the table above accounts for
 51+32+60+17 = 160 bytes of relocated tables, plus 4 bytes at `$CA93`-`$CA96` for the
 stats-display zero source (`STAT_ZERO_SOURCE_PATCH` - not a relocated game table, just
 data this effort introduced, so it's not a row above, but it's carved from the same
 pool). Total used: 164 bytes. **28 bytes remain** (`$CAE4`-`$CAFF`), contiguous.
+
+`TerrainBottomYLo`/`Hi` is the one pair that costs this block nothing: `Hi` went
+into the `$E4F9` region instead (17 of its 30 bytes) and `Lo` grew into the 7
+bytes `Hi` vacated, so the expansion is paid for entirely out of space the
+earlier steps freed.
 
 ## Terrain Buffer Reference Sites
 
@@ -269,6 +282,51 @@ decode loop (stops when compressed input is exhausted, via `CompressedDataPtr` v
 wherever `SramPtr` ended up after pass one) are already fully dynamic on the actual
 decompressed length, not hardcoded to the old 1,056-byte/48-row size.
 
+## Ball-Position Probe (`$EDEA`)
+
+The routine both the pre-swing perspective view and the at-rest lie check go
+through. Given a ball position in `$9C`/`$9E`/`$9F`, it returns the terrain
+tile under it in `$A0` and a lie code in `$C9`; `$EDD0` and `$EDE6` are its
+two call sites, the latter clamping X first. Lie code 5 is out of bounds, and
+the routine's entry (`LDX #$00` / `STX $A0`) means an early bail leaves the
+tile as 0, which the perspective renderer draws as nothing at all.
+
+Its first test is whether the ball is still on the terrain, and it is the
+fifth table pair this effort has had to expand:
+
+```
+$EDFD  LDY ScrollLimit              ; $010D
+$EE00  LDA BallY     / SEC / SBC TerrainBottomYLo,Y   ; $EFE2
+$EE06  LDA BallYHigh /       SBC TerrainBottomYHi,Y   ; $EFEC -> $E4F9
+$EE0B  BCC $EE13                    ; on the terrain - do the real lookup
+$EE0D  JMP $EF96                    ; below it - INX x5, STX $C9 (lie 5)
+```
+
+Both tables hold `224 + 16 * ScrollLimit`, which is exactly the hole's terrain
+height in pixels given `ScrollLimit = (terrain_height - 28) / 2`. Vanilla ships
+10 entries each, packed with zero slack at `$EFE2`-`$EFF5` and followed
+immediately by real code at `$EFF6`, so any hole over 46 rows indexes past the
+end of both. `ScrollLimit = 11` - a 50-row hole - is the only out-of-range
+index whose garbage reads `$0000`, and a threshold of zero can never exceed
+`BallY`, so every position on such a hole returns lie 5 with no tile: a blank
+perspective scene and an out-of-bounds ruling on every shot. Every other
+out-of-range index lands on bytes forming a threshold far larger than any
+`BallY`, so the check silently never fires and the hole plays correctly, which
+is why the 54-, 56-, 58- and 60-row holes passed playtesting and only JP
+France 18 - the catalog's only 50-row hole - failed.
+
+`golf/core/patches/wram_expansion/terrain_bottom_tables.py` expands both to 17
+entries. Beyond fixing `ScrollLimit = 11`, it makes the check work at all on
+every hole over 46 rows, where a ball below the terrain currently reaches the
+row lookup with an index past the end of `TerrainRowOffsetsLo`/`Hi` instead of
+being ruled out of bounds.
+
+**`ScrollLimit`'s consumers are now a closed set.** `find-refs '010D' --type
+ram` returns exactly five sites, all accounted for: `$DAD9` (fixed bank) is
+the per-hole metadata load that writes it; `$8F79` (bank `$0D`) is `LD_8F73`'s
+loop bound; `$97C1`/`$97C6` (bank `$0D`) clamp a manual camera pan to it; and
+`$EDFD` is this probe. No other table is indexed by it.
+
 ## High-Level Plan
 
 Reclaiming the stats/replay region has to happen in a way that's provably safe before
@@ -328,6 +386,15 @@ the routines already patched above.
   stats - see `L8_9B43` and `$AD43` above for steps 1-2, and the "Step 3 and 4"
   paragraph above for the read-side patches. This is done until a gap turns up in
   playtesting.
+- Every table indexed by `ScrollLimit` is found and expanded - that index's five
+  consumers are enumerated in "Ball-Position Probe" above. The tables indexed by
+  `ViewVerticalOffset` are *not* closed the same way: each was found by searching the
+  ROM for a known table's operand bytes, which only finds a table once you already
+  suspect it. Five table pairs have now turned up this way, four of them only when a
+  tall hole misbehaved in a specific spot, so assume a sixth exists until a
+  `ViewVerticalOffset` sweep as rigorous as the `ScrollLimit` one says otherwise. The
+  failure mode is quiet: an out-of-range read usually lands on bytes that happen to
+  behave, and only one index in seven broke visibly.
 
 Patches are grouped via `CompositePatch` (`golf/core/patches/composite.py`), which
 implements the same `ROMPatch` interface (`can_apply`/`is_applied`/`apply`) over a
