@@ -54,7 +54,10 @@ in this package.
 - `server/ids.py` holds the base62 alphabet and codec every public id shares. A seed's is
   the encoding of its `qr_seed_id`; a round's permalink id is drawn as text.
 - `server/seeds.py` is the only code that writes `seeds` and `seed_holes`, and the only
-  place seed ids are drawn or converted.
+  place seed ids are drawn or converted. It owns withdrawal and restoration: each changes
+  only `withdrawn_at` and records an audit action in the same transaction. The seed's
+  manifest and unfinished IPS are never changed. The row repeats the manifest's build and
+  finish-ABI versions for operations, and loading verifies that the copies agree.
 - `server/users.py` is the only code that writes `users`, and the only place player ids
   are drawn. `seeds.creator_id` holds a `users.id`.
 - `server/entries.py` is the only code that writes `entries`, and the only place MAC keys
@@ -91,6 +94,10 @@ in this package.
   and a restore.
 - Actions are POST forms that redirect back with `?result=`, which the page shows. State
   never changes on a GET.
+- Withdrawing a seed keeps its public page, manifest, entries and rounds, replaces the
+  download form with a public notice and makes the IPS POST answer JSON 410. The admin's
+  note stays in the audit log and never reaches a public page. Restoring re-enables the
+  same stored IPS.
 - Templates live in `server/templates/admin/`, extend `base.html`, and share the macros in
   `server/templates/admin/_admin.html`.
 

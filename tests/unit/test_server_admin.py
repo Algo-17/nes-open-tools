@@ -9,11 +9,14 @@ from golf.randomizer.catalog import Catalog, HoleStore
 from golf.randomizer.curation import CurationSnapshot
 from server.app import create_app
 from server.config import Config
+from tests.app_state import app_state
 from tests.unit.test_server_app import (
     IPS,
     UNWRITTEN,
     FakeBuilder,
     entered_seed,
+    generate_seed,
+    post_download,
     scan_path,
 )
 
@@ -81,6 +84,8 @@ def test_admin_pages_are_not_found_for_anyone_else(fake_builder, who):
             assert "not_found.heading" in response.text, path
         for path in (
             f"/admin/seeds/{seed_id}/rebuild",
+            f"/admin/seeds/{seed_id}/withdraw",
+            f"/admin/seeds/{seed_id}/restore",
             f"/admin/rounds/{round_id}/void",
         ):
             assert post(client, path).status_code == 404, path
@@ -141,6 +146,9 @@ def test_detail_pages_show_the_seed_the_round_and_the_player(fake_builder):
         alice_id = alice_link.group(1)
         user_page = client.get(f"/admin/users/{alice_id}").text
     assert f"{len(IPS)} bytes" in seed_page
+    assert '<th scope="row">Manifest schema</th>' in seed_page
+    assert '<th scope="row">Build version</th>' in seed_page
+    assert '<th scope="row">Finish ABI version</th>' in seed_page
     assert f'href="/admin/rounds/{round_id}"' in seed_page
     assert "<td>LUIGI</td>" in seed_page
     assert '<td class="num over-par">5</td>' in round_page
@@ -156,6 +164,99 @@ def test_missing_details_are_not_found(fake_builder, path):
     with admin_client(fake_builder) as client:
         sign_in(client, "admin")
         assert client.get(path).status_code == 404
+
+
+# -- Withdraw and restore seeds ------------------------------------------------------------
+
+
+def test_withdrawal_keeps_the_seed_and_manifest_but_refuses_downloads(fake_builder):
+    with admin_client(fake_builder, strings=UNWRITTEN) as client:
+        seed_id = generate_seed(client)
+        sign_in(client, "admin")
+        response = post(
+            client,
+            f"/admin/seeds/{seed_id}/withdraw",
+            note="broken Mario Open hole",
+        )
+        assert response.status_code == 303
+        assert response.headers["location"] == (
+            f"/admin/seeds/{seed_id}?result=withdrawn"
+        )
+
+        public = client.get(f"/h/{seed_id}")
+        manifest = client.get(f"/h/{seed_id}.json")
+        refused = post_download(client, seed_id)
+        with app_state(client).db.transaction() as conn:
+            entries = conn.execute(
+                "SELECT count(*) FROM entries WHERE seed_id = ?", (seed_id,)
+            ).fetchone()[0]
+        admin_page = client.get(f"/admin/seeds/{seed_id}").text
+        activity = client.get("/admin/activity").text
+
+    assert public.status_code == 200
+    assert "seed.download.withdrawn" in public.text
+    assert 'id="download-form"' not in public.text
+    assert "download.js" not in public.text
+    assert manifest.status_code == 200
+    assert manifest.json()["schema"] == 2
+    assert refused.status_code == 410
+    assert refused.json() == {"error": "seed_withdrawn", "values": {}}
+    assert entries == 0
+    assert not hasattr(fake_builder, "finished")
+    assert "broken Mario Open hole" in admin_page + activity
+    assert "broken Mario Open hole" not in public.text
+    assert "withdrawn" in admin_page + activity
+
+
+def test_restoring_a_seed_makes_its_original_download_available(fake_builder):
+    with admin_client(fake_builder, strings=UNWRITTEN) as client:
+        seed_id = generate_seed(client)
+        sign_in(client, "admin")
+        post(client, f"/admin/seeds/{seed_id}/withdraw")
+        restored = post(client, f"/admin/seeds/{seed_id}/restore")
+        downloaded = post_download(client, seed_id)
+        admin_page = client.get(f"/admin/seeds/{seed_id}").text
+
+    assert restored.status_code == 303
+    assert restored.headers["location"] == (
+        f"/admin/seeds/{seed_id}?result=seed_restored"
+    )
+    assert downloaded.status_code == 200
+    for action in ("withdrawn", "restored"):
+        assert action in admin_page
+
+
+def test_invalid_seed_lifecycle_transitions_render_conflicts(fake_builder):
+    with admin_client(fake_builder) as client:
+        seed_id = generate_seed(client)
+        sign_in(client, "admin")
+        active_restore = post(client, f"/admin/seeds/{seed_id}/restore")
+        post(client, f"/admin/seeds/{seed_id}/withdraw")
+        second_withdrawal = post(client, f"/admin/seeds/{seed_id}/withdraw")
+
+    assert active_restore.status_code == 409
+    assert "already active" in active_restore.text
+    assert second_withdrawal.status_code == 409
+    assert "already withdrawn" in second_withdrawal.text
+
+
+def test_withdrawing_a_seed_does_not_invalidate_an_existing_round(fake_builder):
+    with admin_client(fake_builder, strings=UNWRITTEN) as client:
+        seed_id, round_id = played_seed(client)
+        post(client, f"/admin/seeds/{seed_id}/withdraw")
+        permalink = client.get(f"/r/{round_id}")
+        replay = client.get(scan_path(client, seed_id, "alice", strokes=5))
+
+    assert permalink.status_code == 200
+    assert replay.status_code == 200
+    assert "round.heading" in replay.text
+
+
+@pytest.mark.parametrize("action", ["withdraw", "restore"])
+def test_acting_on_a_missing_seed_is_not_found(fake_builder, action):
+    with admin_client(fake_builder) as client:
+        sign_in(client, "admin")
+        assert post(client, f"/admin/seeds/0000000000/{action}").status_code == 404
 
 
 # -- Flag, void and restore ---------------------------------------------------------------

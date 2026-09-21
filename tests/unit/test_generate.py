@@ -7,6 +7,7 @@ import pytest
 
 from golf.core.patches.seeded_wind import derive_hole_seeds
 from golf.core.patches.sram_defaults import Club, magic_bytes
+from golf.randomizer.build import BUILD_VERSION, FINISH_ABI_VERSION
 from golf.randomizer.catalog import (
     JP_ROM,
     US_ROM,
@@ -18,7 +19,13 @@ from golf.randomizer.catalog import (
 from golf.randomizer.curation import CurationSnapshot
 from golf.randomizer.generate import GENERATOR_VERSION, GenerationError, generate
 from golf.randomizer.layout import COUNTS, satisfies
-from golf.randomizer.manifest import ClubRules, Manifest, Settings, required_roms
+from golf.randomizer.manifest import (
+    SCHEMA,
+    ClubRules,
+    Manifest,
+    Settings,
+    required_roms,
+)
 from golf.randomizer.pool import build_pool
 
 
@@ -67,7 +74,10 @@ def test_draws_a_prng_seed_when_the_settings_have_none(real_catalog, real_curati
 
 def test_records_versions_and_round_trips(real_catalog, real_curation):
     manifest = generate(real_catalog, real_curation, Settings(prng_seed="abc"))
+    assert manifest.schema == SCHEMA == 2
     assert manifest.generator_version == GENERATOR_VERSION
+    assert manifest.build_version == BUILD_VERSION == 2
+    assert manifest.finish_abi_version == FINISH_ABI_VERSION == 1
     assert manifest.catalog_version == real_catalog.version
     assert manifest.curation_stamp == real_curation.stamp
     assert Manifest.from_json(json.loads(json.dumps(manifest.to_json()))) == manifest

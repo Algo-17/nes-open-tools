@@ -115,4 +115,16 @@ MIGRATIONS: list[str] = [
     CREATE INDEX admin_actions_by_target ON admin_actions (target_type, target_id, id);
     CREATE INDEX admin_actions_by_admin ON admin_actions (admin_id, id);
     """,
+    # 2: unfinished build provenance and seed withdrawal lifecycle
+    """
+    ALTER TABLE seeds
+        ADD COLUMN build_version INTEGER NOT NULL DEFAULT 1 CHECK (build_version >= 1);
+
+    ALTER TABLE seeds
+        ADD COLUMN finish_abi_version INTEGER NOT NULL DEFAULT 1
+            CHECK (finish_abi_version >= 1);
+
+    ALTER TABLE seeds
+        ADD COLUMN withdrawn_at TEXT;
+    """,
 ]

@@ -20,6 +20,7 @@ from dataclasses import replace
 
 from golf.core.patches.seeded_wind import derive_hole_seeds
 
+from .build import BUILD_VERSION, FINISH_ABI_VERSION
 from .catalog import JP_ROM, Catalog, CatalogEntry
 from .curation import CurationSnapshot
 from .layout import choose_layout
@@ -150,6 +151,8 @@ def generate(
     return Manifest(
         schema=SCHEMA,
         generator_version=GENERATOR_VERSION,
+        build_version=BUILD_VERSION,
+        finish_abi_version=FINISH_ABI_VERSION,
         catalog_version=catalog.version,
         curation_stamp=curation.stamp,
         settings=replace(settings, prng_seed=prng_seed),

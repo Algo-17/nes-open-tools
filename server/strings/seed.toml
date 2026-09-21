@@ -21,6 +21,10 @@ text = """
 Change customizable settings here and download the patched ROM.
 The ROM is patched in this browser."""
 
+[seed.download.withdrawn]
+note = "seed was withdrawn by an administrator because its stored ROM should no longer be distributed; seed page, manifest and results remain available"
+text = "This seed has been withdrawn by an administrator. Typically this is because the seed's ROM includes a gamebreaking bug."
+
 [seed.download.noscript]
 note = "shown only with JavaScript off; downloading needs it"
 text = """
@@ -145,6 +149,10 @@ note = "download refused by the server, a ROM this seed needs wasn't verified; {
 text = """
 Couldn't verify ROM file(s): {roms}
 """
+
+[seed.download.status.refused.seed_withdrawn]
+note = "download request refused because an administrator withdrew this seed; can appear on an older cached copy of the seed page"
+text = "Download failed because this seed has been withdrawn."
 
 [seed.download.status.refused.unavailable]
 note = "download refused, the server can't build ROMs right now; try later"

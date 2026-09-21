@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from golf.core.patches.sram_defaults import Club
+from golf.randomizer.build import BUILD_VERSION, FINISH_ABI_VERSION
 from golf.randomizer.catalog import (
     JP_ROM,
     US_ROM,
@@ -15,6 +16,10 @@ from golf.randomizer.catalog import (
     RomSource,
 )
 from golf.randomizer.manifest import (
+    LEGACY_BUILD_VERSION,
+    LEGACY_FINISH_ABI_VERSION,
+    LEGACY_SCHEMA,
+    SCHEMA,
     ClubRules,
     Course,
     Manifest,
@@ -48,8 +53,10 @@ def course(**overrides) -> Course:
 
 def manifest(**overrides) -> Manifest:
     fields: dict[str, Any] = dict(
-        schema=1,
+        schema=SCHEMA,
         generator_version=1,
+        build_version=BUILD_VERSION,
+        finish_abi_version=FINISH_ABI_VERSION,
         catalog_version=1,
         curation_stamp="stamp",
         settings=Settings(prng_seed="abc"),
@@ -91,6 +98,8 @@ def test_json_shape():
     assert list(data) == [
         "schema",
         "generator_version",
+        "build_version",
+        "finish_abi_version",
         "catalog_version",
         "curation_stamp",
         "settings",
@@ -227,9 +236,64 @@ def test_rejects_missing_and_unknown_fields():
         Manifest.from_json(data)
 
 
+def test_schema_one_loads_with_its_implicit_versions_and_keeps_its_shape():
+    data = manifest().to_json()
+    data["schema"] = LEGACY_SCHEMA
+    del data["build_version"]
+    del data["finish_abi_version"]
+    loaded = Manifest.from_json(data)
+    assert loaded.build_version == LEGACY_BUILD_VERSION
+    assert loaded.finish_abi_version == LEGACY_FINISH_ABI_VERSION
+    assert loaded.to_json() == data
+
+
+def test_schema_one_cannot_claim_another_build_version():
+    with pytest.raises(ManifestError, match="implies build_version 1"):
+        manifest(schema=LEGACY_SCHEMA, build_version=2)
+
+
+def test_schema_one_cannot_claim_another_finish_abi():
+    with pytest.raises(ManifestError, match="implies finish_abi_version 1"):
+        manifest(
+            schema=LEGACY_SCHEMA,
+            build_version=LEGACY_BUILD_VERSION,
+            finish_abi_version=2,
+        )
+
+
+@pytest.mark.parametrize("value", [None, 0, -1, True, "2"])
+def test_schema_two_requires_a_positive_integer_build_version(value):
+    data = manifest().to_json()
+    data["build_version"] = value
+    with pytest.raises(ManifestError, match="build_version"):
+        Manifest.from_json(data)
+
+
+def test_schema_two_requires_the_build_version_field():
+    data = manifest().to_json()
+    del data["build_version"]
+    with pytest.raises(ManifestError, match="missing fields.*build_version"):
+        Manifest.from_json(data)
+
+
+@pytest.mark.parametrize("value", [None, 0, -1, True, "1"])
+def test_schema_two_requires_a_positive_integer_finish_abi_version(value):
+    data = manifest().to_json()
+    data["finish_abi_version"] = value
+    with pytest.raises(ManifestError, match="finish_abi_version"):
+        Manifest.from_json(data)
+
+
+def test_schema_two_requires_the_finish_abi_version_field():
+    data = manifest().to_json()
+    del data["finish_abi_version"]
+    with pytest.raises(ManifestError, match="missing fields.*finish_abi_version"):
+        Manifest.from_json(data)
+
+
 def test_rejects_other_schemas_before_reading_fields():
-    data = manifest().to_json() | {"schema": 2, "something_new": 1}
-    with pytest.raises(ManifestError, match="schema 2"):
+    data = manifest().to_json() | {"schema": 3, "something_new": 1}
+    with pytest.raises(ManifestError, match="schema 3"):
         Manifest.from_json(data)
 
 

@@ -133,6 +133,8 @@ function refusal(body, status) {
   }
   if (reason === "roms_missing")
     return t("seed.download.status.refused.roms_missing", { roms: values.roms ?? "" });
+  if (reason === "seed_withdrawn")
+    return t("seed.download.status.refused.seed_withdrawn");
   if (reason === "unavailable") return t("seed.download.status.refused.unavailable");
   return t("seed.download.status.failed", { status });
 }

@@ -407,19 +407,20 @@ When a seed is generated, we should store the `manifest` in a database,
 alongside an `id` of some format.  This `id` will be what's used to share
 seeds with other players.  ALTTPR uses URLs of the form `https://alttpr.com/h/5yoAlr2rMm`.  We should do something similar.
 
-The `manifest` should be the only thing persisted in the database, at least for now.
-It should contain the outputs mentioned above as well as all the settings/decisions
-that were specified at seed generation time.  They should be generally stable
-across version releases of the randomizer.  At some point we might even want to
-start maintaining "old" versions of patches to ensure that old seeds can always
-be downloaded. (See Appendix C)
+The implemented site persists both the manifest and the unfinished IPS produced for it.
+The manifest contains the outputs mentioned above as well as all the settings/decisions
+that were specified at seed generation time. Its `build_version` records which unfinished
+buildchain produced that IPS, and its `finish_abi_version` records how a current finisher
+may safely personalize it. This lets old seeds remain downloadable without retaining
+every old patch implementation. A bad stored artifact can be withdrawn without deleting
+or rebuilding the seed. (See Appendix C and `docs/manifest.md`.)
 
 -----
 
 One quality of this approach that I really feel is worth calling out:
-storing the `manifest` in the database means that the generation process
-can change freely between versions.  *Only the manifest-to-rom part
-of the pipeline needs to be stable*.
+storing the manifest means that the generation process can change freely between
+versions. The manifest-to-ROM operation is explicitly versioned, and the site stores its
+unfinished output so the implementation itself does not need to remain available forever.
 
 ## Appendix A: Mirroring & Transforms
 
@@ -465,7 +466,7 @@ Either way, this work is specifically not in scope for v1.0.
 
 ## Appendix C: Catalog Immutability
 
-In order to ensure that old manifests remain downloadable, the catalog's
+In order to ensure that old manifests remain resolvable, the catalog's
 contents should be considered immutable.  If a custom hole is in the
 catalog and a tweak is made to it by the author that we want to
 incorporate, we leave the old version in the catalog, mark it as

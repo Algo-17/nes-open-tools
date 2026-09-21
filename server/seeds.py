@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from golf.core.patches.seeded_wind import predict_hole
 from golf.randomizer.manifest import Manifest
 
+from . import audit
 from .db import Database
 from .ids import ALPHABET, ID_LENGTH, MAX_VALUE, decode_base62, encode_base62, is_id
 
@@ -32,6 +33,14 @@ class SeedIdError(ValueError):
 
 class SeedIdExhaustedError(RuntimeError):
     """Every draw collided with an existing seed, which only a broken generator makes likely."""
+
+
+class SeedAlreadyWithdrawnError(ValueError):
+    """A seed cannot be withdrawn while it is already withdrawn."""
+
+
+class SeedNotWithdrawnError(ValueError):
+    """A seed cannot be restored while it is active."""
 
 
 def encode_seed_id(value: int) -> str:
@@ -119,15 +128,18 @@ def insert_seed(
             with db.transaction() as conn:
                 conn.execute(
                     """
-                    INSERT INTO seeds (id, qr_seed_id, manifest, generator_version, catalog_version,
-                                       curation_stamp, unfinished_ips, creator_id, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO seeds (id, qr_seed_id, manifest, generator_version, build_version,
+                                       finish_abi_version, catalog_version, curation_stamp,
+                                       unfinished_ips, creator_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         seed_id,
                         qr_seed_id,
                         text,
                         manifest.generator_version,
+                        manifest.build_version,
+                        manifest.finish_abi_version,
                         manifest.catalog_version,
                         manifest.curation_stamp,
                         unfinished_ips,
@@ -154,8 +166,15 @@ class SeedRow:
     #: the manifest exactly as stored
     manifest_json: str
     manifest: Manifest
+    build_version: int
+    finish_abi_version: int
     creator_id: int | None
     created_at: str
+    withdrawn_at: str | None
+
+    @property
+    def withdrawn(self) -> bool:
+        return self.withdrawn_at is not None
 
 
 def load_seed(db: Database, seed_id: str) -> SeedRow | None:
@@ -166,18 +185,36 @@ def load_seed(db: Database, seed_id: str) -> SeedRow | None:
         return None
     with db.transaction() as conn:
         row = conn.execute(
-            "SELECT id, qr_seed_id, manifest, creator_id, created_at FROM seeds WHERE id = ?",
+            """
+            SELECT id, qr_seed_id, manifest, build_version, finish_abi_version,
+                   creator_id, created_at, withdrawn_at
+            FROM seeds WHERE id = ?
+            """,
             (seed_id,),
         ).fetchone()
     if row is None:
         return None
+    manifest = Manifest.from_json(json.loads(row["manifest"]))
+    if row["build_version"] != manifest.build_version:
+        raise RuntimeError(
+            f"seed {row['id']} stores build version {row['build_version']} but its "
+            f"manifest requires {manifest.build_version}"
+        )
+    if row["finish_abi_version"] != manifest.finish_abi_version:
+        raise RuntimeError(
+            f"seed {row['id']} stores finish ABI {row['finish_abi_version']} but its "
+            f"manifest requires {manifest.finish_abi_version}"
+        )
     return SeedRow(
         id=row["id"],
         qr_seed_id=row["qr_seed_id"],
         manifest_json=row["manifest"],
-        manifest=Manifest.from_json(json.loads(row["manifest"])),
+        manifest=manifest,
+        build_version=row["build_version"],
+        finish_abi_version=row["finish_abi_version"],
         creator_id=row["creator_id"],
         created_at=row["created_at"],
+        withdrawn_at=row["withdrawn_at"],
     )
 
 
@@ -195,3 +232,64 @@ def load_unfinished_ips(db: Database, seed_id: str) -> bytes | None:
             "SELECT unfinished_ips FROM seeds WHERE id = ?", (seed_id,)
         ).fetchone()
     return None if row is None else bytes(row["unfinished_ips"])
+
+
+def _note(text: str | None) -> str | None:
+    text = (text or "").strip()
+    return text or None
+
+
+def withdraw_seed(
+    db: Database,
+    seed_id: str,
+    admin_id: int,
+    note: str | None = None,
+    now: str | None = None,
+) -> None:
+    """Withdraw a seed from downloads and log it atomically.
+
+    Raises KeyError for a missing seed and SeedAlreadyWithdrawnError when it is
+    already withdrawn.
+    """
+    withdrawn_at = now if now is not None else utc_now()
+    note = _note(note)
+    with db.transaction() as conn:
+        row = conn.execute(
+            "SELECT withdrawn_at FROM seeds WHERE id = ?", (seed_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(seed_id)
+        if row["withdrawn_at"] is not None:
+            raise SeedAlreadyWithdrawnError(seed_id)
+        conn.execute(
+            "UPDATE seeds SET withdrawn_at = ? WHERE id = ?", (withdrawn_at, seed_id)
+        )
+        audit.record(
+            conn,
+            admin_id,
+            audit.WITHDRAW,
+            audit.SEED,
+            seed_id,
+            withdrawn_at,
+            note=note,
+        )
+
+
+def restore_seed(
+    db: Database, seed_id: str, admin_id: int, now: str | None = None
+) -> None:
+    """Restore a withdrawn seed's downloads and log it atomically.
+
+    Raises KeyError for a missing seed and SeedNotWithdrawnError when it is active.
+    """
+    restored_at = now if now is not None else utc_now()
+    with db.transaction() as conn:
+        row = conn.execute(
+            "SELECT withdrawn_at FROM seeds WHERE id = ?", (seed_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(seed_id)
+        if row["withdrawn_at"] is None:
+            raise SeedNotWithdrawnError(seed_id)
+        conn.execute("UPDATE seeds SET withdrawn_at = NULL WHERE id = ?", (seed_id,))
+        audit.record(conn, admin_id, audit.RESTORE, audit.SEED, seed_id, restored_at)

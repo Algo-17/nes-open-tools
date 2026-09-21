@@ -73,6 +73,66 @@ identical bytes as RLE records, splits records at 65,535 bytes, and never starts
 offset `0x454F46` (which reads as the `EOF` marker). The same inputs always produce the same
 patch. `ips.apply` reads RLE records and the truncation extension.
 
+## Two-stage artifacts and the finish ABI
+
+The randomizer site builds a seed in two stages. Once, it applies the seed's course and
+feature stack to the vanilla ROM and stores that **unfinished artifact** as an IPS. For
+each download, it reconstructs the unfinished ROM and applies a much smaller finishing
+stack: new-save defaults, then either player-specific QR credentials or the guest QR
+disable patch.
+
+Two independent versions describe that boundary:
+
+- `build_version` identifies the recipe that creates the unfinished artifact. Any change
+  that may change its bytes bumps this version, even when the artifact remains compatible
+  with the same finisher.
+- `finish_abi_version` identifies the interface the artifact exposes to a finisher: the
+  locations, expected preimages, field widths and meanings that finishing consumes.
+  Several build versions may produce the same finish ABI.
+
+The promise of a supported finish ABI is **this release can safely personalize this
+stored artifact**. It is not a promise that two releases produce byte-identical finished
+ROMs. Compatible refactors, validation improvements and behavior fixes may change the
+finisher without changing its ABI.
+
+The current ABI covers:
+
+- the vanilla SRAM-default locations and bytes that `sram_defaults` replaces;
+- the QR seed ID, player ID and MAC key placeholder locations, sizes, fill and encoding;
+- the installed QR patch identity that `qr_credentials` requires;
+- the splice `qr_disable` restores for a guest ROM; and
+- the QR payload protocol consumed by the submission server.
+
+Moving or resizing a placeholder, changing a credential's representation, changing the
+guest-disable mechanism, changing the QR payload's meaning, or having the unfinished
+stack consume a location finishing expects to remain vanilla breaks the ABI. A change
+elsewhere in the unfinished recipe only bumps `build_version`.
+
+Building requires the current build and ABI versions: it must not label an artifact with
+an ABI it does not produce. Finishing dispatches by `finish_abi_version`, not by
+`build_version`. When the ABI eventually changes, the release can retain the small old
+finisher without retaining the old course writer, compressor, imported resources or
+other unfinished-build machinery. Unsupported ABIs are refused rather than patched at
+guessed locations.
+
+Compatibility is not expressed as a minimum or a numeric build-version range. Such a
+range assumes compatibility is chronological and contiguous, while a later builder can
+reuse an older ABI. The manifest records the ABI directly instead.
+
+### Testing the ABI
+
+An unfinished IPS contains the randomized course, including source-ROM terrain and green
+data, so historical IPS artifacts are not checked into this repository as golden files.
+Instead, a unit golden records only the non-course ABI metadata derived from the patch
+objects: consumed offsets, lengths, expected bytes, QR identity, guest splice and payload
+protocol. A change to that test requires an explicit decision that the change is
+compatible or that `finish_abi_version` must be bumped.
+
+Integration tests build an unfinished artifact locally when the vanilla ROM and
+rehydrated course data are available, then prove both signed-in and guest finishing
+against it. A private deployment may additionally exercise retained historical
+artifacts, but repository tests do not need to contain their course bytes.
+
 ## Recipes
 
 A recipe is a stack written as JSON (`golf/core/patches/recipe.py`):

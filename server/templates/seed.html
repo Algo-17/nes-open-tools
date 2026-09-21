@@ -9,67 +9,73 @@
   {% set download = seed.download %}
   <section>
     <h2>{{ t("seed.download.heading") }}</h2>
-    <article class="download"
-             data-state="checking"
-             data-required-roms="{{ download.required_roms | map(attribute='id') | join(' ') }}"
-             data-filename="{{ download.filename }}">
-      <p>{{ t("seed.download.lead") }}</p>
-      {% if not user and sign_in_enabled %}
-        <p class="download-guest">
-          {{ t("seed.download.guest_notice") }}
-          <a href="/auth/login?next={{ return_path | urlencode }}">{{ t("seed.download.guest_sign_in") }}</a>
-        </p>
-      {% endif %}
-
-      <noscript>
-        <p><mark>{{ t("seed.download.noscript") }}</mark></p>
-      </noscript>
-
-      <form method="post" action="{{ download.ips_url }}" id="download-form">
-        <label for="download-name">{{ t("seed.download.name_label") }}</label>
-        <input type="text"
-               id="download-name"
-               name="player_name"
-               value="{{ download.default_name }}"
-               maxlength="{{ download.name_max }}"
-               autocomplete="off"
-               autocapitalize="characters"
-               spellcheck="false"
-               required>
-
-        {% if download.required_bag %}
-          <p>{{ t("seed.download.locked_bag", clubs=download.required_bag|join(" ")) }}</p>
-        {% else %}
-          <fieldset>
-            <legend>{{ t("seed.download.clubs_legend") }}</legend>
-            <div class="club-grid">
-              {% for label in download.club_labels %}
-                <label>
-                  {% if label in download.banned %}
-                    <input type="checkbox" name="clubs" value="{{ label }}" disabled>
-                    <s>{{ label }}</s>
-                  {% else %}
-                    <input type="checkbox"
-                           name="clubs"
-                           value="{{ label }}"
-                           {% if label in download.default_clubs %}checked{% endif %}>
-                    {{ label }}
-                  {% endif %}
-                </label>
-              {% endfor %}
-            </div>
-            <small>{{ t("seed.download.clubs_help", max=download.clubs_max) }}</small>
-          </fieldset>
+    {% if seed.withdrawn_at %}
+      <article>
+        <p><mark>{{ t("seed.download.withdrawn") }}</mark></p>
+      </article>
+    {% else %}
+      <article class="download"
+               data-state="checking"
+               data-required-roms="{{ download.required_roms | map(attribute='id') | join(' ') }}"
+               data-filename="{{ download.filename }}">
+        <p>{{ t("seed.download.lead") }}</p>
+        {% if not user and sign_in_enabled %}
+          <p class="download-guest">
+            {{ t("seed.download.guest_notice") }}
+            <a href="/auth/login?next={{ return_path | urlencode }}">{{ t("seed.download.guest_sign_in") }}</a>
+          </p>
         {% endif %}
 
-        <p class="download-status"
-           role="status"
-           aria-live="polite">{{ t("seed.download.status.checking") }}</p>
-        <p class="download-rom-setup"><a href="/rom">{{ t("seed.download.rom_setup_link") }}</a></p>
+        <noscript>
+          <p><mark>{{ t("seed.download.noscript") }}</mark></p>
+        </noscript>
 
-        <button type="submit" disabled>{{ t("seed.download.submit") }}</button>
-      </form>
-    </article>
+        <form method="post" action="{{ download.ips_url }}" id="download-form">
+          <label for="download-name">{{ t("seed.download.name_label") }}</label>
+          <input type="text"
+                 id="download-name"
+                 name="player_name"
+                 value="{{ download.default_name }}"
+                 maxlength="{{ download.name_max }}"
+                 autocomplete="off"
+                 autocapitalize="characters"
+                 spellcheck="false"
+                 required>
+
+          {% if download.required_bag %}
+            <p>{{ t("seed.download.locked_bag", clubs=download.required_bag|join(" ")) }}</p>
+          {% else %}
+            <fieldset>
+              <legend>{{ t("seed.download.clubs_legend") }}</legend>
+              <div class="club-grid">
+                {% for label in download.club_labels %}
+                  <label>
+                    {% if label in download.banned %}
+                      <input type="checkbox" name="clubs" value="{{ label }}" disabled>
+                      <s>{{ label }}</s>
+                    {% else %}
+                      <input type="checkbox"
+                             name="clubs"
+                             value="{{ label }}"
+                             {% if label in download.default_clubs %}checked{% endif %}>
+                      {{ label }}
+                    {% endif %}
+                  </label>
+                {% endfor %}
+              </div>
+              <small>{{ t("seed.download.clubs_help", max=download.clubs_max) }}</small>
+            </fieldset>
+          {% endif %}
+
+          <p class="download-status"
+             role="status"
+             aria-live="polite">{{ t("seed.download.status.checking") }}</p>
+          <p class="download-rom-setup"><a href="/rom">{{ t("seed.download.rom_setup_link") }}</a></p>
+
+          <button type="submit" disabled>{{ t("seed.download.submit") }}</button>
+        </form>
+      </article>
+    {% endif %}
   </section>
 
   <section>
@@ -198,10 +204,12 @@
   <p><a href="/h/{{ seed.id }}.json">{{ t("seed.manifest_link") }}</a></p>
 {% endblock %}
 {% block scripts %}
-  <script type="application/json"
-          id="download-strings">{{ download_strings | tojson }}</script>
-  <script type="application/json"
-          id="download-roms">{{ seed.download.rom_details | tojson }}</script>
-  <script src="{{ static_url('romstore.js') }}" defer></script>
-  <script src="{{ static_url('download.js') }}" defer></script>
+  {% if not seed.withdrawn_at %}
+    <script type="application/json"
+            id="download-strings">{{ download_strings | tojson }}</script>
+    <script type="application/json"
+            id="download-roms">{{ seed.download.rom_details | tojson }}</script>
+    <script src="{{ static_url('romstore.js') }}" defer></script>
+    <script src="{{ static_url('download.js') }}" defer></script>
+  {% endif %}
 {% endblock %}

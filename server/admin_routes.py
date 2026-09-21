@@ -35,6 +35,12 @@ from .rounds import (
     unflag_round,
     void_round,
 )
+from .seeds import (
+    SeedAlreadyWithdrawnError,
+    SeedNotWithdrawnError,
+    restore_seed,
+    withdraw_seed,
+)
 from .users import User
 
 
@@ -101,6 +107,30 @@ def admin_router(templates: Jinja2Templates) -> APIRouter:
     @router.get("/seeds/{seed_id}", response_class=HTMLResponse)
     def seed(request: Request, seed_id: str):
         return seed_page(request, seed_id)
+
+    @router.post("/seeds/{seed_id}/withdraw")
+    def withdraw(request: Request, seed_id: str, admin: Admin, note: Note = ""):
+        try:
+            withdraw_seed(db_of(request), seed_id, admin.id, note)
+        except KeyError:
+            raise not_found() from None
+        except SeedAlreadyWithdrawnError:
+            return seed_page(
+                request, seed_id, "Not withdrawn: the seed is already withdrawn.", 409
+            )
+        return _redirect(f"/admin/seeds/{seed_id}", "withdrawn")
+
+    @router.post("/seeds/{seed_id}/restore")
+    def restore_seed_route(request: Request, seed_id: str, admin: Admin):
+        try:
+            restore_seed(db_of(request), seed_id, admin.id)
+        except KeyError:
+            raise not_found() from None
+        except SeedNotWithdrawnError:
+            return seed_page(
+                request, seed_id, "Not restored: the seed is already active.", 409
+            )
+        return _redirect(f"/admin/seeds/{seed_id}", "seed_restored")
 
     @router.get("/rounds", response_class=HTMLResponse)
     def rounds(request: Request, page: PageNumber = 1, flagged: bool = False):

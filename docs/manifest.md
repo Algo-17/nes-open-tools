@@ -15,8 +15,10 @@ With the hole list trimmed to one of its 18 slots:
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "generator_version": 1,
+  "build_version": 2,
+  "finish_abi_version": 1,
   "catalog_version": 1,
   "curation_stamp": "f640f8d1…",
   "settings": {
@@ -46,28 +48,50 @@ With the hole list trimmed to one of its 18 slots:
 
 | Part | Holds | Read by |
 |---|---|---|
-| Version fields | `schema`, `generator_version`, `catalog_version`, `curation_stamp` | Loading and auditing |
+| Version fields | `schema`, `generator_version`, `build_version`, `finish_abi_version`, `catalog_version`, `curation_stamp` | Loading, building, finishing and auditing |
 | `settings` | Every input to generation, the PRNG seed included | The seed page, regeneration |
 | `course` | Concrete values | The build |
 
-A build reads only `course`, and nothing in `course` needs interpreting: hole ids rather
-than filters, a music slug rather than "random", wind seeds rather than the string they
-were derived from. Loading is strict: a missing or unknown field is an error.
-`golf/randomizer/build.py` turns `course` into the seed's unfinished ROM, and finishes that
-ROM per player (`docs/randomizer_devplan.md`).
+After checking the build and finish-ABI versions, an unfinished build reads only `course`,
+and nothing in `course` needs interpreting: hole ids rather than filters, a music slug
+rather than "random", wind seeds rather than the string they were derived from. Loading
+is strict: a missing or unknown field is an error. `golf/randomizer/build.py` turns
+`course` into the seed's unfinished ROM, and finishes that ROM per player
+(`docs/randomizer_devplan.md`).
 
 **Versions.**
 
-- `schema` fixes the manifest's shape and the patches every seed gets without the
-  manifest naming them (WRAM expansion, multi-bank terrain, attribute streaming, the
-  signpost banner, menu trim and the rest of the base ROM). A change to either that would
-  make an existing manifest load or build differently bumps it. A loader reads only its
-  own schema.
+- `schema` fixes the manifest's JSON shape and the meaning of its fields. It changes when
+  either of those changes. A loader may read historical schemas even when the release no
+  longer implements their unfinished buildchain.
 - `generator_version` is bumped whenever the same catalog, curation and settings would
   generate a different manifest.
+- `build_version` identifies the recipe that turns the concrete manifest, catalog hole
+  data and vanilla US ROM into the unfinished ROM. It is bumped whenever that operation
+  could produce different bytes: a base patch, patch order, course writer, compressor or
+  imported build resource changing all count. `golf-randomize build` refuses a build
+  version the installed release does not implement rather than silently reinterpreting it.
+- `finish_abi_version` identifies the locations, preimages and meanings the stored
+  unfinished artifact exposes to per-download finishing. Multiple build versions may
+  share an ABI. Finishing dispatches on this version and promises safe personalization,
+  not byte-identical output across releases. See `docs/patch_stack.md`.
 - `catalog_version` and `curation_stamp` record what generation read, for auditing.
   Hole ids resolve through the frozen catalog forever (`docs/catalog.md`), so neither is
   needed to build.
+
+### Schema history
+
+| Schema | Build version | Finish ABI | Change and support |
+|---|---:|---:|---|
+| 1 | 1 (implicit) | 1 (implicit) | The randomizer 1.0 manifest. Current code reads it for display and finishes its stored artifact through ABI 1, but does not rebuild it. |
+| 2 | 2 | 1 | Adds the required `build_version` and `finish_abi_version` fields. This is the current schema and unfinished buildchain. |
+
+Loading schema 1 supplies `build_version = 1` and `finish_abi_version = 1` in memory and
+serializes it back in its original shape without adding either field. The website stores
+and serves the original JSON text as well as the unfinished IPS, so neither artifact of an
+existing seed is rewritten by a schema update. Reading an old manifest and rebuilding it
+are deliberately separate: the site needs the former to keep seed and round pages
+working, while its stored IPS makes the latter unnecessary.
 
 ### Settings
 

@@ -101,6 +101,26 @@ def test_show_prints_the_course(tmp_path):
     assert f"music: {manifest.course.music}" in completed.stdout
 
 
+def test_show_reads_schema_one_but_build_refuses_its_historical_buildchain(tmp_path):
+    current = generate(
+        Catalog.load(), CurationSnapshot.load(), Settings(prng_seed="schema-one")
+    ).to_json()
+    current["schema"] = 1
+    del current["build_version"]
+    del current["finish_abi_version"]
+    path = tmp_path / "schema-one.json"
+    path.write_text(json.dumps(current))
+
+    shown = run("show", path)
+    assert shown.returncode == 0, shown.stderr
+
+    rom = tmp_path / "base.nes"
+    rom.write_bytes(b"")
+    built = run("build", rom, path, "--unfinished")
+    assert built.returncode == 1
+    assert "requires unfinished build version 1" in built.stderr
+
+
 def test_generate_refuses_settings_the_model_refuses(tmp_path):
     path = tmp_path / "seed.json"
     for args, message in [

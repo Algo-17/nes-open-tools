@@ -53,6 +53,7 @@ def _magic_words(manifest_text: str) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class Counts:
     seeds: int
+    withdrawn_seeds: int
     users: int
     entries: int
     rounds: int
@@ -65,7 +66,9 @@ def counts(db: Database) -> Counts:
     with db.transaction() as conn:
         row = conn.execute(
             """
-            SELECT (SELECT count(*) FROM seeds) AS seeds, (SELECT count(*) FROM users) AS users,
+            SELECT (SELECT count(*) FROM seeds) AS seeds,
+                   (SELECT count(*) FROM seeds WHERE withdrawn_at IS NOT NULL) AS withdrawn_seeds,
+                   (SELECT count(*) FROM users) AS users,
                    (SELECT count(*) FROM entries) AS entries, (SELECT count(*) FROM rounds) AS rounds,
                    (SELECT count(*) FROM rounds WHERE flagged) AS flagged,
                    (SELECT count(*) FROM voided_rounds) AS voided,
@@ -200,6 +203,7 @@ class SeedListing:
     magic_words: tuple[str, ...]
     par: int
     created_at: str
+    withdrawn_at: str | None
     creator_id: int | None
     creator_name: str | None
     entries: int
@@ -207,7 +211,7 @@ class SeedListing:
 
 
 _SEED_SELECT = f"""
-    SELECT seeds.id, seeds.manifest, seeds.created_at, seeds.creator_id,
+    SELECT seeds.id, seeds.manifest, seeds.created_at, seeds.withdrawn_at, seeds.creator_id,
            {_USER_NAME} AS creator_name,
            (SELECT count(*) FROM entries WHERE entries.seed_id = seeds.id) AS entries,
            (SELECT count(*) FROM rounds JOIN entries ON entries.id = rounds.entry_id
@@ -223,6 +227,7 @@ def _seed_listing(row: sqlite3.Row) -> SeedListing:
         magic_words=tuple(course["magic_words"]),
         par=sum(hole["par"] for hole in course["holes"]),
         created_at=row["created_at"],
+        withdrawn_at=row["withdrawn_at"],
         creator_id=row["creator_id"],
         creator_name=row["creator_name"],
         entries=row["entries"],
@@ -334,6 +339,7 @@ class SeedDetail:
     holes: tuple[HoleSlot, ...]
     entries: list[EntryListing]
     rounds: list[RoundListing]
+    history: list[AdminAction]
 
 
 def seed_detail(db: Database, seed_id: str, catalog: Catalog) -> SeedDetail | None:
@@ -353,6 +359,7 @@ def seed_detail(db: Database, seed_id: str, catalog: Catalog) -> SeedDetail | No
             f"{_ROUND_SELECT} WHERE entries.seed_id = ? ORDER BY rounds.received_at, rounds.id",
             (seed_id,),
         ).fetchall()
+        history = _history(conn, audit.SEED, seed_id)
     holes = []
     for number, slot in enumerate(seed.manifest.course.holes, start=1):
         try:
@@ -370,6 +377,7 @@ def seed_detail(db: Database, seed_id: str, catalog: Catalog) -> SeedDetail | No
         holes=tuple(holes),
         entries=[_entry_listing(entry) for entry in entries],
         rounds=[_round_listing(listing) for listing in rounds],
+        history=history,
     )
 
 

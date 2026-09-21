@@ -12,6 +12,11 @@ The two-stage build: a manifest into an unfinished ROM, and an unfinished ROM in
   `scorecard_qr` wrote.
 
 See docs/randomizer_devplan.md.
+
+`BUILD_VERSION` identifies the unfinished recipe. `FINISH_ABI_VERSION` identifies the
+interface its artifact exposes to the per-download finisher. Building requires both
+current versions; finishing dispatches only on the ABI, so several historical build
+versions may share one finisher without retaining their unfinished buildchains.
 """
 
 import hashlib
@@ -64,6 +69,10 @@ SIGNPOST_ART = (
 #: The largest seed ID the 8-byte field holds. The site draws below 62**10.
 MAX_SEED_ID = (1 << (8 * payload.SEED_ID_LEN)) - 1
 MAX_PLAYER_ID = (1 << (8 * payload.PLAYER_ID_LEN)) - 1
+#: the unfinished-ROM recipe this release implements
+BUILD_VERSION = 2
+#: the interface current unfinished ROMs expose to the per-download finisher
+FINISH_ABI_VERSION = 1
 
 
 class BuildError(ValueError):
@@ -221,6 +230,17 @@ def _check_vanilla(vanilla: bytes) -> None:
 def build_unfinished(
     manifest: Manifest, catalog: Catalog, store: HoleStore, vanilla: bytes
 ) -> UnfinishedBuild:
+    if manifest.build_version != BUILD_VERSION:
+        raise BuildError(
+            f"manifest requires unfinished build version {manifest.build_version}; "
+            f"this release builds version {BUILD_VERSION}"
+        )
+    if manifest.finish_abi_version != FINISH_ABI_VERSION:
+        raise BuildError(
+            f"manifest requires finish ABI {manifest.finish_abi_version}; "
+            f"unfinished build version {BUILD_VERSION} produces ABI "
+            f"{FINISH_ABI_VERSION}"
+        )
     _check_vanilla(vanilla)
     steps = unfinished_steps(manifest, catalog, store, vanilla)
     build = PatchStack(steps).build(vanilla)
@@ -260,14 +280,13 @@ class FinishedBuild:
     regions: dict[str, list[tuple[int, int]]]
 
 
-def finish(
+def _finish_abi_1(
     manifest: Manifest,
     vanilla: bytes,
     unfinished_ips: bytes,
     options: PlayerOptions,
     credentials: QrCredentials | None = None,
 ) -> FinishedBuild:
-    """Finish a seed's stored unfinished IPS for one player. No credentials finishes a guest ROM."""
     _check_vanilla(vanilla)
     options.check(manifest.course.clubs)
     unfinished = ips.apply(vanilla, unfinished_ips)
@@ -276,6 +295,30 @@ def finish(
     return FinishedBuild(
         rom=build.rom, ips=ips.diff(vanilla, build.rom), regions=build.regions
     )
+
+
+_FINISHERS = {1: _finish_abi_1}
+
+
+def finish(
+    manifest: Manifest,
+    vanilla: bytes,
+    unfinished_ips: bytes,
+    options: PlayerOptions,
+    credentials: QrCredentials | None = None,
+) -> FinishedBuild:
+    """Finish a stored artifact through the ABI it declares.
+
+    No credentials finishes a guest ROM. Compatible implementation changes do not bump
+    the ABI; a change to the locations, preimages or meanings the finisher consumes does.
+    """
+    try:
+        finisher = _FINISHERS[manifest.finish_abi_version]
+    except KeyError:
+        raise BuildError(
+            f"this release cannot finish artifact ABI {manifest.finish_abi_version}"
+        ) from None
+    return finisher(manifest, vanilla, unfinished_ips, options, credentials)
 
 
 def clubs_from_labels(labels: Iterable[str]) -> frozenset[Club]:

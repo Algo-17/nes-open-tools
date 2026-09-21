@@ -24,6 +24,10 @@
     <p class="admin-result"><ins>Round voided.</ins></p>
   {% elif result == "restored" %}
     <p class="admin-result"><ins>Round restored.</ins></p>
+  {% elif result == "withdrawn" %}
+    <p class="admin-result"><ins>Seed withdrawn.</ins></p>
+  {% elif result == "seed_restored" %}
+    <p class="admin-result"><ins>Seed restored.</ins></p>
   {% elif result == "slot_taken" %}
     <p class="admin-result"><del>Not restored: that entry's slot already has a round. Void it first.</del></p>
   {% endif %}
@@ -101,7 +105,10 @@
       <tbody>
         {% for seed in seeds %}
           <tr>
-            <td>{{ words(seed.id, seed.magic_words) }}</td>
+            <td>
+              {{ words(seed.id, seed.magic_words) }}
+              {% if seed.withdrawn_at %}<del>withdrawn</del>{% endif %}
+            </td>
             <td><code>{{ seed.id }}</code></td>
             <td class="num">{{ seed.par }}</td>
             {% if show_creator %}<td>{% if seed.creator_id is not none %}<a href="/admin/users/{{ seed.creator_id }}">{{ seed.creator_name }}</a>{% endif %}</td>{% endif %}
@@ -150,6 +157,7 @@
   {%- elif entry.action == "unflag" %}flag cleared
   {%- elif entry.action == "void" %}voided
   {%- elif entry.action == "restore" %}restored
+  {%- elif entry.action == "withdraw" %}withdrawn
 {%- else %}{{ entry.action }}{% endif %}
 {%- endmacro %}
 

@@ -30,6 +30,22 @@
             <td>{{ detail.generator_version }}</td>
           </tr>
           <tr>
+            <th scope="row">Manifest schema</th>
+            <td>{{ seed.manifest.schema }}</td>
+          </tr>
+          <tr>
+            <th scope="row">Build version</th>
+            <td>{{ seed.build_version }}</td>
+          </tr>
+          <tr>
+            <th scope="row">Finish ABI version</th>
+            <td>{{ seed.finish_abi_version }}</td>
+          </tr>
+          <tr>
+            <th scope="row">Status</th>
+            <td>{% if seed.withdrawn %}<del>withdrawn</del> at {{ seed.withdrawn_at }}{% else %}active{% endif %}</td>
+          </tr>
+          <tr>
             <th scope="row">Catalog version</th>
             <td>{{ detail.catalog_version }}</td>
           </tr>
@@ -44,6 +60,28 @@
         </tbody>
       </table>
     </div>
+  </section>
+
+  <section>
+    <h2>Availability</h2>
+    {% if seed.withdrawn %}
+      <p>This seed cannot be downloaded. Restoring it makes the original stored ROM available again.</p>
+      <form method="post" action="/admin/seeds/{{ seed.id }}/restore">
+        <button type="submit">Restore this seed</button>
+      </form>
+    {% else %}
+      <p>Withdrawal keeps the seed page, manifest, entries and rounds, but refuses new ROM downloads. The note is only shown to admins.</p>
+      <form method="post" action="/admin/seeds/{{ seed.id }}/withdraw">
+        <label for="withdraw-note">Note</label>
+        <input type="text" id="withdraw-note" name="note" autocomplete="off">
+        <button type="submit" class="secondary">Withdraw this seed</button>
+      </form>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Admin history</h2>
+    {% if detail.history %}{{ admin.history_table(detail.history) }}{% else %}<p>No admin action on this seed.</p>{% endif %}
   </section>
 
   <section>

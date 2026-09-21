@@ -1,5 +1,6 @@
 """Integration: the two-stage build from a generated manifest, on the real vanilla ROM."""
 
+import hashlib
 from dataclasses import replace
 from pathlib import Path
 
@@ -23,7 +24,13 @@ from golf.randomizer.build import (
 from golf.randomizer.catalog import US_ROM, Catalog, HoleStore
 from golf.randomizer.curation import CurationSnapshot
 from golf.randomizer.generate import generate
-from golf.randomizer.manifest import ClubRules, Settings
+from golf.randomizer.manifest import (
+    LEGACY_BUILD_VERSION,
+    LEGACY_FINISH_ABI_VERSION,
+    LEGACY_SCHEMA,
+    ClubRules,
+    Settings,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 ROM_PATH = ROOT / "nes_open_us.nes"
@@ -140,6 +147,20 @@ def test_the_unfinished_build_is_deterministic(
     assert build_unfinished(jp_manifest, catalog, store, vanilla).ips == unfinished.ips
 
 
+def test_build_version_two_golden_unfinished_ips_hashes(
+    unfinished, jp_manifest, nes_manifest, catalog, store, vanilla
+):
+    assert any(str(slot.id) == "jp_france/18" for slot in jp_manifest.course.holes)
+    nes = build_unfinished(nes_manifest, catalog, store, vanilla)
+    assert {
+        "jp_france_18": hashlib.sha256(unfinished.ips).hexdigest(),
+        "nes_only": hashlib.sha256(nes.ips).hexdigest(),
+    } == {
+        "jp_france_18": "aa425a7f6a0822a79fa11cb0192d45464819430b27602dbf49e31e529ff105a1",
+        "nes_only": "ba05c9227e2e8b0b8bd590f386cacfdd9c9686e80d3dc094154be36930cf949d",
+    }
+
+
 def test_the_unfinished_rom_holds_the_placeholder_fill(unfinished):
     for _, symbol, length in PLACEHOLDERS:
         start = HEADER + placeholder_offset(symbol)
@@ -187,6 +208,21 @@ def test_signed_in_finishing_changes_only_defaults_and_credentials(
     for suffix, symbol, length in PLACEHOLDERS:
         start = HEADER + placeholder_offset(symbol)
         assert signed_in.rom[start : start + length] == values[suffix]
+
+
+def test_a_stored_schema_one_unfinished_ips_can_still_be_finished(
+    jp_manifest, vanilla, unfinished
+):
+    legacy = replace(
+        jp_manifest,
+        schema=LEGACY_SCHEMA,
+        build_version=LEGACY_BUILD_VERSION,
+        finish_abi_version=LEGACY_FINISH_ABI_VERSION,
+    )
+    assert (
+        finish(legacy, vanilla, unfinished.ips, OPTIONS).rom
+        == finish(jp_manifest, vanilla, unfinished.ips, OPTIONS).rom
+    )
 
 
 def test_guest_finishing_changes_only_defaults_and_the_splice(

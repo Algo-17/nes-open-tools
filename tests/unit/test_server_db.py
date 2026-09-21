@@ -93,6 +93,33 @@ def test_migrating_again_changes_nothing(db):
     assert tables(db) == before
 
 
+def test_migration_two_backfills_existing_seeds_without_changing_their_artifacts(db):
+    db.migrate(MIGRATIONS[:1])
+    insert_seed(db)
+    with db.transaction() as conn:
+        before = conn.execute(
+            "SELECT manifest, unfinished_ips FROM seeds WHERE id = '0000000001'"
+        ).fetchone()
+
+    assert db.migrate() == 2
+    with db.transaction() as conn:
+        after = conn.execute(
+            """
+            SELECT manifest, unfinished_ips, build_version, finish_abi_version,
+                   withdrawn_at
+            FROM seeds WHERE id = '0000000001'
+            """
+        ).fetchone()
+
+    assert (after["manifest"], after["unfinished_ips"]) == (
+        before["manifest"],
+        before["unfinished_ips"],
+    )
+    assert after["build_version"] == 1
+    assert after["finish_abi_version"] == 1
+    assert after["withdrawn_at"] is None
+
+
 def test_a_failing_script_leaves_the_version_and_schema_as_they_were(db):
     migrations = [
         "CREATE TABLE first (x INTEGER);",
@@ -143,6 +170,8 @@ def test_a_valid_seed_inserts(db):
         {"qr_seed_id": 839299365868340224},
         {"id": "short"},
         {"id": "elevenchars"},
+        {"build_version": 0},
+        {"finish_abi_version": 0},
     ],
 )
 def test_seed_constraints(db, overrides):

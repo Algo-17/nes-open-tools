@@ -14,8 +14,10 @@ from server.seeds import (
     ID_LENGTH,
     INSERT_ATTEMPTS,
     MAX_QR_SEED_ID,
+    SeedAlreadyWithdrawnError,
     SeedIdError,
     SeedIdExhaustedError,
+    SeedNotWithdrawnError,
     SeedRow,
     decode_seed_id,
     encode_seed_id,
@@ -24,7 +26,10 @@ from server.seeds import (
     load_unfinished_ips,
     manifest_text,
     new_qr_seed_id,
+    restore_seed,
+    withdraw_seed,
 )
+from server.users import sign_in
 
 IPS = b"PATCH\x00\x00\x10\x00\x01\xeaEOF"
 
@@ -129,6 +134,8 @@ def test_a_seed_is_stored_with_its_eighteen_holes(db, manifest):
     assert seed["qr_seed_id"] == 12345
     assert seed["unfinished_ips"] == IPS
     assert seed["generator_version"] == manifest.generator_version
+    assert seed["build_version"] == manifest.build_version
+    assert seed["finish_abi_version"] == manifest.finish_abi_version
     assert seed["catalog_version"] == manifest.catalog_version
     assert seed["curation_stamp"] == manifest.curation_stamp
     assert seed["creator_id"] is None
@@ -181,6 +188,10 @@ def test_load_seed_returns_the_stored_manifest(db, manifest):
     assert row.qr_seed_id == 99
     assert row.manifest == manifest
     assert row.manifest_json == manifest_text(manifest)
+    assert row.build_version == manifest.build_version
+    assert row.finish_abi_version == manifest.finish_abi_version
+    assert row.withdrawn_at is None
+    assert not row.withdrawn
 
 
 @pytest.mark.parametrize("text", ["0000000001", "not-an-id", "nope.json"])
@@ -196,3 +207,72 @@ def test_load_unfinished_ips_returns_the_stored_blob(db, manifest):
 @pytest.mark.parametrize("text", ["0000000001", "not-an-id"])
 def test_load_unfinished_ips_is_none_for_a_missing_or_malformed_id(db, text):
     assert load_unfinished_ips(db, text) is None
+
+
+# -- Withdrawal -----------------------------------------------------------------------------
+
+
+def admin(db: Database):
+    return sign_in(
+        db,
+        "dev:admin",
+        "admin",
+        None,
+        None,
+        now="2026-09-20T12:00:00Z",
+        draw=lambda: 1,
+    )
+
+
+def test_withdraw_and_restore_change_only_lifecycle_state_and_log_each_action(
+    db, manifest
+):
+    seed_id = insert_seed(db, manifest, IPS, draw=lambda: 7)
+    user = admin(db)
+    original = seed_row(db, seed_id)
+
+    withdraw_seed(
+        db,
+        seed_id,
+        user.id,
+        "  broken course  ",
+        now="2026-09-20T13:00:00Z",
+    )
+    withdrawn = seed_row(db, seed_id)
+    assert withdrawn.withdrawn_at == "2026-09-20T13:00:00Z"
+    assert withdrawn.withdrawn
+    assert withdrawn.manifest_json == original.manifest_json
+    assert load_unfinished_ips(db, seed_id) == IPS
+
+    restore_seed(db, seed_id, user.id, now="2026-09-20T14:00:00Z")
+    restored = seed_row(db, seed_id)
+    assert restored.withdrawn_at is None
+    assert not restored.withdrawn
+    assert restored.manifest_json == original.manifest_json
+    assert load_unfinished_ips(db, seed_id) == IPS
+
+    with db.transaction() as conn:
+        actions = conn.execute(
+            """
+            SELECT action, target_type, target_id, note, created_at
+            FROM admin_actions ORDER BY id
+            """
+        ).fetchall()
+    assert [tuple(action) for action in actions] == [
+        ("withdraw", "seed", seed_id, "broken course", "2026-09-20T13:00:00Z"),
+        ("restore", "seed", seed_id, None, "2026-09-20T14:00:00Z"),
+    ]
+
+
+def test_invalid_withdrawal_transitions_write_no_audit_rows(db, manifest):
+    seed_id = insert_seed(db, manifest, IPS)
+    user = admin(db)
+    with pytest.raises(SeedNotWithdrawnError):
+        restore_seed(db, seed_id, user.id)
+    withdraw_seed(db, seed_id, user.id)
+    with pytest.raises(SeedAlreadyWithdrawnError):
+        withdraw_seed(db, seed_id, user.id)
+    with pytest.raises(KeyError):
+        withdraw_seed(db, "0000000001", user.id)
+    with db.transaction() as conn:
+        assert conn.execute("SELECT count(*) FROM admin_actions").fetchone()[0] == 1

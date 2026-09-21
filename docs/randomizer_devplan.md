@@ -66,7 +66,12 @@ Storing the unfinished IPS means everything upstream of it, the hole data, trans
 seed-level patches, is fixed for the life of the seed regardless of later changes to the
 catalog or the patches. That is the catalog immutability of `randomizer.md` Appendix C
 without maintaining old versions. A fix is published as a new seed rather than changing
-the ROM an existing seed produces.
+the ROM an existing seed produces. The manifest's `build_version` names the unfinished
+buildchain that produced the blob, while `finish_abi_version` names the stable interface
+the blob exposes to per-download personalization. Historical manifests remain readable,
+but a release that does not retain their buildchain refuses to rebuild them rather than
+silently using the current one. It may still finish their stored artifact through a
+supported ABI; see `docs/patch_stack.md`.
 
 ### ROM gating
 
@@ -106,9 +111,12 @@ bucket holds five seeds and gets one back a minute (`server/ratelimit.py`), and 
 submission the form accepts spends one. There is no global ceiling: a surge of real users
 should queue on the generation semaphore, not be refused. The client IP is the last entry
 of the forwarded header the reverse proxy sets, the address the proxy saw, or the socket's
-peer when there is no header, as in development. Downloads are not limited: finishing takes milliseconds and
-stores nothing for guests. Seeds are never expired or cleaned up, because seed pages are
-the share link.
+peer when there is no header, as in development. Downloads are not limited: finishing
+takes milliseconds and stores nothing for guests. Seeds are never expired or cleaned up,
+because seed pages are the share link. An admin may withdraw a seed whose stored ROM must
+no longer be distributed: its page, manifest, entries and rounds remain, while its
+download answers 410. Restoring makes the same stored IPS available again. Both
+transitions are audit logged; an admin note is never public.
 
 Stats are the carrot: the seed page tells a signed-out player what signing in gets
 them, and the guest marker stops a league member playing a full round on a ROM that
@@ -119,13 +127,13 @@ cannot submit.
 | Table | Holds |
 |---|---|
 | `users` | Internal id, Discord id (`dev:<name>` for bypass users), Discord `username` and `global_name` (pages show `global_name`, falling back to `username`), avatar hash, a random unique nonzero uint32 `player_id` drawn at first sign-in, created_at, last_login. Names and avatar are refreshed on every sign-in |
-| `seeds` | A 10-character base62 id for URLs and the same value as an integer, `qr_seed_id`, both unique; manifest JSON, generator and catalog versions, curation stamp, the immutable unfinished IPS blob, nullable creator and created_at |
+| `seeds` | A 10-character base62 id for URLs and the same value as an integer, `qr_seed_id`, both unique; manifest JSON, generator, unfinished-build, finish-ABI and catalog versions, curation stamp, the immutable unfinished IPS blob, nullable creator, created_at and nullable withdrawn_at |
 | `seed_holes` | seed, position 1-18, catalog hole id, transforms, par, wind seed, pin index, wind direction anchor, wind speed anchor. Pure denormalization of the manifest for SQL stats; a migration can always backfill it |
 | `entries` | One per (seed, user), unique. The player's choices at their latest download (name, clubs), one MAC key per slot, created_at, updated_at |
 | `rounds` | A scan the server accepted: a unique `public_id`, the base62 id of its `/r/<id>` permalink; entry, slot, raw payload, total strokes, total putts, received_at, flagged, with an admin-only flag note. Unique on (entry, slot), which is the first-submission rule |
 | `round_holes` | round, position, strokes, putts. Joins to `seed_holes` on (seed, position) |
 | `voided_rounds` | A round an admin voided: its `public_id`, entry, slot, the payload (unique, and holding every hole, so no hole rows), received_at, its flag and note, voided_at, an admin-only note. A scan of a voided payload is refused; restoring moves it back while its slot is empty |
-| `admin_actions` | The audit log: admin, action, target type and id, the admin's note, a JSON detail object, created_at. Who flagged, voided or restored a round, and its complete history, is read from here rather than from columns on the round itself |
+| `admin_actions` | The audit log: admin, action, target type and id, the admin's note, a JSON detail object, created_at. Who withdrew or restored a seed, who flagged, voided or restored a round, and each target's complete history are read from here rather than from actor columns on the target |
 
 An entry is the record that a signed-in player has entered a seed, in the tournament
 sense. Downloading again updates the entry's choices and finishes with the same
@@ -209,15 +217,16 @@ qr_seed_id INTEGER NOT NULL UNIQUE CHECK (qr_seed_id BETWEEN 1 AND 8392993658683
 | `GET /pages/<slug>` | A checked-in Markdown page; enabled unlisted pages remain available by direct URL, while disabled pages answer 404 |
 | `GET /rom` | ROM setup, pure client-side: pick files, hash, store in IndexedDB, show verified status |
 | `GET /generate`, `POST /generate` | Settings form: par target, source ROMs, music or random, and club rules in a collapsed section of their own, open when a returned form has them set. The mercy point and tag filters take their defaults. POST redirects to the seed page |
-| `GET /h/<id>` | Seed page: the magic words, hole list with source, par and yards, totals, music, settings, required ROMs, the download form, the signed-in user's entry if any, recorded rounds |
+| `GET /h/<id>` | Seed page: the magic words, hole list with source, par and yards, totals, music, settings, required ROMs, recorded rounds, and either the download form or a withdrawn notice |
 | `GET /h/<id>.json` | The manifest |
-| `POST /h/<id>/patch.ips` | Name, clubs, ROM hashes in; the finished IPS out. Signed in, upserts the entry and finishes with credentials; signed out, finishes as a guest. The page's script intercepts the form submit, fetches this, patches the ROM from IndexedDB and triggers the download |
+| `POST /h/<id>/patch.ips` | Name, clubs, ROM hashes in; the finished IPS out. Signed in, upserts the entry and finishes with credentials; signed out, finishes as a guest. A withdrawn seed answers JSON 410 before creating an entry or finishing. The page's script intercepts the form submit, fetches this, patches the ROM from IndexedDB and triggers the download |
 | `GET /s/<48 chars>` | QR submission: decode, verify MAC, record, then 303 to the round's permalink, with `?recorded` for the scan that recorded it. Uncached. A rejection has no round to point at, so it renders here |
 | `GET /r/<id>` | A round's permalink: its scorecard, or 410 and a page of its own once an admin has voided it. An ordinary cacheable page, linked from the seed page, `/me` and a scan |
 | `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout` | Discord sign-in |
 | `GET /me` | The player's entries and rounds. Signed out, redirects to sign-in |
 | `GET /admin/...` | Counts, seeds, rounds (flagged filter), users, voided rounds, admin activity, and each seed, round and user. Admins only |
 | `POST /admin/rounds/<id>/flag`, `.../unflag`, `.../void`, `.../restore` | Flag with a note, clear the flag, void with a note, restore into an empty slot. `<id>` is the round's `public_id` |
+| `POST /admin/seeds/<id>/withdraw`, `.../restore` | Refuse or restore downloads without changing the seed's manifest, unfinished IPS, entries or rounds; withdrawal takes an admin-only note |
 | `GET /healthz` | For the reverse proxy |
 
 Everything is a form or a link. The only fetch from JavaScript is the IPS.
@@ -252,7 +261,9 @@ says so, a ROM playtested. Items 1 to 6 build the library; 7 onward build the si
    sources, curation tags, the newest drawable version of each lineage and families;
    `generate(catalog, curation, settings) -> Manifest`, which draws a family per slot into
    a layout, chooses the music, derives the wind seeds and draws the magic words, each from
-   its own stream of the PRNG seed. See `docs/manifest.md`.
+   its own stream of the PRNG seed. Schema 2 adds `build_version` and
+   `finish_abi_version`; schema 1 is read as historical build version 1 and finish ABI 1
+   without being rewritten. See `docs/manifest.md`.
 4. **QR patch split.** Done: `scorecard_qr` (`golf/core/patches/scorecard_qr.py`) writes
    the image with its placeholders at the fill; `qr_credentials`
    (`golf/core/patches/qr_credentials.py`) is three byte patches that fill them, expecting

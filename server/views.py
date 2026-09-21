@@ -129,6 +129,7 @@ class SeedView:
     id: str
     magic_words: tuple[str, ...]
     created_at: str
+    withdrawn_at: str | None
     holes: tuple[HoleView, ...]
     total_par: int
     total_distance: int
@@ -198,6 +199,7 @@ def seed_view(row: SeedRow, catalog: Catalog, curation: CurationSnapshot) -> See
         id=row.id,
         magic_words=course.magic_words,
         created_at=row.created_at,
+        withdrawn_at=row.withdrawn_at,
         holes=holes,
         total_par=course.par,
         total_distance=sum(hole.distance for hole in holes),

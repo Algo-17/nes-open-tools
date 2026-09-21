@@ -81,6 +81,8 @@ RANGEFINDER_DATA_URL = "/rangefinder-data"
 RATE_LIMITED = "rate_limited"
 UNAVAILABLE = "unavailable"
 POOL_TOO_SMALL = "pool"
+#: a seed kept as a permalink but no longer distributed
+SEED_WITHDRAWN = "seed_withdrawn"
 
 #: paths a missing resource answers with JSON rather than the not-found page
 MACHINE_SUFFIXES = (".json", ".ips")
@@ -338,6 +340,8 @@ def create_app(
         row = load_seed(request.app.state.db, seed_id)
         if row is None:
             raise not_found()
+        if row.withdrawn:
+            return json_refusal(410, SEED_WITHDRAWN)
         seed_builder: SeedBuilder = request.app.state.builder
         manifest = row.manifest
         state = DownloadState.from_form(await request.form())
@@ -367,6 +371,13 @@ def create_app(
             )
         except BuilderUnavailableError:
             return json_refusal(503, UNAVAILABLE)
+        # A withdrawal while the threadpool was finishing withholds the result. A signed-in
+        # request may already have created its entry, but no ROM leaves the server.
+        current = load_seed(db, seed_id)
+        if current is None:  # pragma: no cover - seeds are never deleted
+            raise not_found()
+        if current.withdrawn:
+            return json_refusal(410, SEED_WITHDRAWN)
         return Response(
             patch,
             media_type="application/octet-stream",

@@ -17,6 +17,7 @@ FLAG = "flag"
 UNFLAG = "unflag"
 VOID = "void"
 RESTORE = "restore"
+WITHDRAW = "withdraw"
 
 #: target types, and what target_id holds for each
 #: a seed's URL id

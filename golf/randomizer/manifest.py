@@ -3,16 +3,16 @@ The manifest: a randomized seed as JSON, holding everything that decides its unf
 
 Three parts:
 
-- The version fields: the manifest `schema`, the generator version, the catalog version
-  and the curation stamp that produced it.
+- The version fields: the manifest `schema`, generator, unfinished-build and finish-ABI
+  versions, catalog version and the curation stamp that produced it.
 - `settings`: every input to generation, the PRNG seed included, so the same catalog,
   curation and settings reproduce the manifest under one generator version.
-- `course`: concrete values, and the only part a build reads. Hole ids, never filters; a
-  music slug, never "random".
+- `course`: concrete values, and the only part the recipe reads after version checks.
+  Hole ids, never filters; a music slug, never "random".
 
-The patches every seed gets are implied by `schema`, and a change that alters what an
-existing manifest builds bumps it. Loading is strict: a missing or unknown field is an
-error. See docs/manifest.md.
+The patches every seed gets are implied by `build_version`; the interface their unfinished
+artifact exposes to personalization is `finish_abi_version`. Loading is strict: a missing
+or unknown field is an error. See docs/manifest.md and docs/patch_stack.md.
 """
 
 from collections.abc import Iterable
@@ -26,7 +26,10 @@ from .layout import COUNTS
 from .music import RANDOM, TRACKS, track
 from .words import MagicWordsError, check_magic_words
 
-SCHEMA = 1
+SCHEMA = 2
+LEGACY_SCHEMA = 1
+LEGACY_BUILD_VERSION = 1
+LEGACY_FINISH_ABI_VERSION = 1
 HOLE_COUNT = 18
 SOURCES = (US_ROM, JP_ROM)
 DEFAULT_PAR = 72
@@ -375,9 +378,19 @@ class Course:
         )
 
 
-_MANIFEST_KEYS = (
+_MANIFEST_KEYS_V1 = (
     "schema",
     "generator_version",
+    "catalog_version",
+    "curation_stamp",
+    "settings",
+    "course",
+)
+_MANIFEST_KEYS_V2 = (
+    "schema",
+    "generator_version",
+    "build_version",
+    "finish_abi_version",
     "catalog_version",
     "curation_stamp",
     "settings",
@@ -389,20 +402,43 @@ _MANIFEST_KEYS = (
 class Manifest:
     schema: int
     generator_version: int
+    #: the unfinished-ROM recipe this manifest requires
+    build_version: int
+    #: the interface the stored unfinished artifact exposes to its finisher
+    finish_abi_version: int
     catalog_version: int
     curation_stamp: str
     settings: Settings
     course: Course
 
     def __post_init__(self):
-        if self.schema != SCHEMA:
+        if self.schema not in (LEGACY_SCHEMA, SCHEMA):
             raise ManifestError(
-                f"unsupported manifest schema {self.schema!r}; this code reads schema {SCHEMA}"
+                f"unsupported manifest schema {self.schema!r}; this code reads schemas "
+                f"{LEGACY_SCHEMA} and {SCHEMA}"
             )
-        for name in ("generator_version", "catalog_version"):
+        for name in (
+            "generator_version",
+            "build_version",
+            "finish_abi_version",
+            "catalog_version",
+        ):
             value = getattr(self, name)
             if not _is_int(value) or value < 1:
                 raise ManifestError(f"{name} must be a positive integer, got {value!r}")
+        if self.schema == LEGACY_SCHEMA and self.build_version != LEGACY_BUILD_VERSION:
+            raise ManifestError(
+                f"manifest schema {LEGACY_SCHEMA} implies build_version "
+                f"{LEGACY_BUILD_VERSION}, got {self.build_version!r}"
+            )
+        if (
+            self.schema == LEGACY_SCHEMA
+            and self.finish_abi_version != LEGACY_FINISH_ABI_VERSION
+        ):
+            raise ManifestError(
+                f"manifest schema {LEGACY_SCHEMA} implies finish_abi_version "
+                f"{LEGACY_FINISH_ABI_VERSION}, got {self.finish_abi_version!r}"
+            )
         if not isinstance(self.curation_stamp, str) or not self.curation_stamp:
             raise ManifestError("curation_stamp must be a non-empty string")
         if self.settings.prng_seed is None:
@@ -411,9 +447,14 @@ class Manifest:
             )
 
     def to_json(self) -> dict:
-        return {
+        data = {
             "schema": self.schema,
             "generator_version": self.generator_version,
+        }
+        if self.schema >= SCHEMA:
+            data["build_version"] = self.build_version
+            data["finish_abi_version"] = self.finish_abi_version
+        return data | {
             "catalog_version": self.catalog_version,
             "curation_stamp": self.curation_stamp,
             "settings": self.settings.to_json(),
@@ -422,14 +463,27 @@ class Manifest:
 
     @classmethod
     def from_json(cls, data: object) -> "Manifest":
-        if isinstance(data, dict) and data.get("schema") != SCHEMA:
+        schema = data.get("schema") if isinstance(data, dict) else None
+        if schema not in (LEGACY_SCHEMA, SCHEMA):
             raise ManifestError(
-                f"unsupported manifest schema {data.get('schema')!r}; this code reads schema {SCHEMA}"
+                f"unsupported manifest schema {schema!r}; this code reads schemas "
+                f"{LEGACY_SCHEMA} and {SCHEMA}"
             )
-        data = _fields(data, _MANIFEST_KEYS, "manifest")
+        keys = _MANIFEST_KEYS_V1 if schema == LEGACY_SCHEMA else _MANIFEST_KEYS_V2
+        data = _fields(data, keys, "manifest")
         return cls(
             schema=data["schema"],
             generator_version=data["generator_version"],
+            build_version=(
+                LEGACY_BUILD_VERSION
+                if schema == LEGACY_SCHEMA
+                else data["build_version"]
+            ),
+            finish_abi_version=(
+                LEGACY_FINISH_ABI_VERSION
+                if schema == LEGACY_SCHEMA
+                else data["finish_abi_version"]
+            ),
             catalog_version=data["catalog_version"],
             curation_stamp=data["curation_stamp"],
             settings=Settings.from_json(data["settings"]),

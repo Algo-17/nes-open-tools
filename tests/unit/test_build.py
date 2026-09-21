@@ -1,5 +1,7 @@
 """Unit tests for the two-stage build's pieces that need no ROM."""
 
+from dataclasses import replace
+
 import pytest
 
 from golf.core import rom_utils
@@ -11,23 +13,126 @@ from golf.core.patches import (
 )
 from golf.core.patches.course_theme import VANILLA_COURSE_BGM
 from golf.core.patches.music_import import MusicImportPatch
-from golf.core.patches.sram_defaults import Club, magic_bytes
-from golf.qr import payload
+from golf.core.patches.qr_credentials import PLACEHOLDERS, placeholder_offset
+from golf.core.patches.scorecard_qr import QR_DISABLE_PATCH, SCORECARD_QR_PATCH
+from golf.core.patches.sram_defaults import Club, magic_bytes, sram_defaults_patches
+from golf.qr import payload, port
 from golf.randomizer.build import (
+    FINISH_ABI_VERSION,
     BuildError,
     PlayerOptions,
+    build_unfinished,
     clubs_from_labels,
     credentials_for,
+    finish,
     finishing_steps,
     music_step,
     player_id_bytes,
     seed_id_bytes,
 )
-from golf.randomizer.catalog import JP_ROM, US_ROM
-from golf.randomizer.manifest import ClubRules
+from golf.randomizer.catalog import JP_ROM, US_ROM, Catalog, HoleStore
+from golf.randomizer.curation import CurationSnapshot
+from golf.randomizer.generate import generate
+from golf.randomizer.manifest import (
+    LEGACY_BUILD_VERSION,
+    LEGACY_SCHEMA,
+    ClubRules,
+    Settings,
+)
 from golf.randomizer.music import TRACKS
 
 KEYS = (bytes(range(1, 9)), bytes(range(9, 17)))
+
+
+def test_historical_build_versions_are_refused_before_building():
+    current = generate(
+        Catalog.load(), CurationSnapshot.load(), Settings(prng_seed="old-build")
+    )
+    legacy = replace(current, schema=LEGACY_SCHEMA, build_version=LEGACY_BUILD_VERSION)
+    with pytest.raises(BuildError, match="requires unfinished build version 1"):
+        build_unfinished(legacy, Catalog.load(), HoleStore(), b"")
+
+
+def test_a_build_refuses_to_mislabel_the_finish_abi_it_produces():
+    current = generate(
+        Catalog.load(), CurationSnapshot.load(), Settings(prng_seed="wrong-abi")
+    )
+    mislabeled = replace(current, finish_abi_version=FINISH_ABI_VERSION + 1)
+    with pytest.raises(BuildError, match="produces ABI 1"):
+        build_unfinished(mislabeled, Catalog.load(), HoleStore(), b"")
+
+
+def test_finishing_refuses_an_unsupported_artifact_abi_before_reading_the_rom():
+    current = generate(
+        Catalog.load(), CurationSnapshot.load(), Settings(prng_seed="future-abi")
+    )
+    future = replace(current, finish_abi_version=FINISH_ABI_VERSION + 1)
+    with pytest.raises(BuildError, match="cannot finish artifact ABI 2"):
+        finish(future, b"", b"", options())
+
+
+def test_finish_abi_one_contract_is_stable_without_rom_or_course_data():
+    """Changing a consumed location, preimage, width or protocol requires an ABI decision."""
+    sram = sram_defaults_patches("LUIGI", {Club.W1, Club.PW}, False, 0x5247)
+    assert FINISH_ABI_VERSION == 1
+    assert {
+        "protocol": payload.PROTOCOL_VERSION,
+        "credential_lengths": (
+            payload.SEED_ID_LEN,
+            payload.PLAYER_ID_LEN,
+            payload.KEY_LEN,
+        ),
+        "placeholder_fill": port.PATCH_FILL,
+        "placeholders": tuple(
+            (suffix, placeholder_offset(symbol), length)
+            for suffix, symbol, length in PLACEHOLDERS
+        ),
+        "qr_identity": (
+            SCORECARD_QR_PATCH.trampoline_offset,
+            SCORECARD_QR_PATCH.trampoline,
+            SCORECARD_QR_PATCH.splice_offset,
+            SCORECARD_QR_PATCH.splice_bytes,
+        ),
+        "guest_disable": (
+            QR_DISABLE_PATCH.prg_offset,
+            QR_DISABLE_PATCH.original,
+            QR_DISABLE_PATCH.patched,
+        ),
+        "sram": tuple(
+            (patch.name, patch.prg_offset, patch.original, len(patch.patched))
+            for patch in sram
+        ),
+    } == {
+        "protocol": 1,
+        "credential_lengths": (8, 4, 8),
+        "placeholder_fill": 0,
+        "placeholders": (
+            ("seed_id", 0x8E5F, 8),
+            ("player_ids", 0x8E67, 8),
+            ("mac_keys", 0x8E6F, 16),
+        ),
+        "qr_identity": (
+            0x3DCBD,
+            bytes.fromhex("20ba852072d302978e60"),
+            0x3452E,
+            bytes.fromhex("bddc"),
+        ),
+        "guest_disable": (0x3452E, bytes.fromhex("bddc"), bytes.fromhex("ba85")),
+        "sram": (
+            ("sram_defaults_player_name", 0x26D5B, b"MARIO     ", 10),
+            (
+                "sram_defaults_clubs",
+                0x26E23,
+                bytes.fromhex("00010205060708090a0b0c0d0e0f"),
+                14,
+            ),
+            ("sram_defaults_bgm_off", 0x26D4E, b"\x10", 1),
+            ("sram_defaults_magic_check_6001", 0x26CC0, b"5", 1),
+            ("sram_defaults_magic_check_6002", 0x26CC7, b"S", 1),
+            ("sram_defaults_magic_write_6001", 0x26D51, b"5", 1),
+            ("sram_defaults_magic_write_6002", 0x26D56, b"S", 1),
+        ),
+    }
 
 
 def options(**overrides) -> PlayerOptions:
