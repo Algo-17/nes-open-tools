@@ -26,6 +26,7 @@ from .base import ROMPatch
 from .composite import CompositePatch
 from .course import CoursePatch
 from .course_theme import course_theme_patch
+from .green_shortcut import green_shortcut_patch
 from .green_slope_physics import (
     DEFAULT_FRICTION,
     DEFAULT_STRENGTH,
@@ -454,6 +455,12 @@ PATCH_SPECS: dict[str, PatchSpec[Any, Any]] = {
             lambda ctx, params: green_slope_physics_patch(
                 params.strength, params.friction
             ),
+        ),
+        PatchSpec(
+            "green_shortcut",
+            "B then Select on the shot-setup view opens the green detail view (docs/green_shortcut.md)",
+            NoParams,
+            lambda ctx, params: green_shortcut_patch(),
         ),
         PatchSpec(
             "putting_practice",

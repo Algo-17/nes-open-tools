@@ -32,6 +32,7 @@ from .byte_patch import BytePatch
 from .composite import CompositePatch
 from .course import CoursePatch, CourseWriteStats
 from .course_theme import course_theme_patch
+from .green_shortcut import green_shortcut_patch
 from .menu_trim import (
     DEFAULT_WORDS,
     RENDERABLE_CHARS,
@@ -122,6 +123,7 @@ __all__ = [
     "CoursePatch",
     "CourseWriteStats",
     "course_theme_patch",
+    "green_shortcut_patch",
     "PatchError",
     "mercy_tap_in_patches",
     "remove_course_banner_patches",

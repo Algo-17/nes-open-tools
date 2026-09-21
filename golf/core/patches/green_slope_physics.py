@@ -169,9 +169,9 @@ MAGNITUDE_ORIGINAL = bytes([0x00, 0x28, 0x28, 0x50, 0x51, 0x78, 0x79])
 
 #: Vanilla's three steepness classes are 40 / 80 / 120 - exactly 1:2:3 - so one
 #: `strength` (the steep value) sets all three.
-DEFAULT_STRENGTH = 50
+DEFAULT_STRENGTH = 80
 #: Must exceed `strength` or the ball never comes to rest on the steepest tile.
-DEFAULT_FRICTION = 60
+DEFAULT_FRICTION = 90
 
 
 @dataclass(frozen=True)

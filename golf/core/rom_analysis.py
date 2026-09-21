@@ -96,6 +96,7 @@ INLINE_ARG_ROUTINES: dict[tuple[int | None, int], InlineArgSpec] = {
     (None, 0xCE84): InlineArgSpec("WriteNametableTiles", FIXED, 2, "word"),
     (None, 0xD80A): InlineArgSpec("Load32BytesToBuffer", FIXED, 2, "word"),
     (None, 0xCE7E): InlineArgSpec("WriteNametableTilesMode2", FIXED, 2, "word"),
+    (None, 0xCE75): InlineArgSpec("WriteNametableTilesMode1", FIXED, 2, "word"),
     (None, 0xD41A): InlineArgSpec("CopyInlineMemoryBlock", FIXED, 6, "copy_block"),
     # Consumes 2 inline bytes (a pointer to an object-record table) despite
     # not touching them directly itself: it JSRs $D8A2 ReadInlineWordParameter,

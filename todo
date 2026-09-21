@@ -7,9 +7,10 @@ V1 todos (lol I'm going to expand the scope of this to mean "before v2"):
 * I think I want a variant of rom name in randomizer site pages w/o the region parens
 * Configuration backups to pw manager
 * Uptime monitoring
-* contact email address?
 * robots.txt
 * Configure rDNS (reverse DNS)?
+* Localize/prettyfy timestamps?
+* Full horizontal scorecards on Seeds page's "Completed Rounds" table
 
 Eventually:
 * deploy from github actions
