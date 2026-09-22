@@ -5,17 +5,19 @@ In-game/vanilla rom investigations:
 V2 todos:
 * I think I want a variant of rom name in randomizer site pages w/o the region parens
 * Configuration backups to pw manager
-* Uptime monitoring
 * robots.txt
 * Configure rDNS (reverse DNS)?
 * Localize/prettyfy timestamps?
 * Full horizontal scorecards on Seeds page's "Completed Rounds" table
-* Version numbers somewhere on site (copyright notice as well?)
+* Version numbers somewhere on site
 * Changelog
 * Anchor tag to seed results? collapse spoiler log/course details by default? idk
 * server metrics, like response times, etc.
 * Expand SRAM defaults on randomizer site (currently missing Enable BGM and more)
 * Integrate green detail shortcut patch
+* Sentry
+* Styled 500 page
+* healthchecks.io integration for litestream
 
 Eventually:
 * deploy from github actions
