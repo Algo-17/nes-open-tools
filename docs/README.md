@@ -40,7 +40,7 @@ One line per document. Command-line tools are indexed in the top-level `README.m
 | [wram_expansion.md](wram_expansion.md) | Growing the terrain buffer past 48 rows |
 | [seeded_wind.md](seeded_wind.md) | Pin positions and wind as a function of a build-time seed |
 | [practice_swing.md](practice_swing.md) | Practice swings that cost no stroke |
-| [green_shortcut.md](green_shortcut.md) | B then Select on the shot-setup view opens the green detail view |
+| [green_shortcut.md](green_shortcut.md) | B then Select opens the green detail view, B then Start the scorecard |
 | [putting_practice.md](putting_practice.md) | Starting every hole as a putt (design note, not shipped) |
 | [green_slope_physics.md](green_slope_physics.md) | Experimental: green slopes as constant acceleration rather than speed-scaled |
 | [prehole_signpost.md](prehole_signpost.md) | The pre-hole signpost card, and replacing its banner art |

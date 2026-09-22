@@ -458,7 +458,7 @@ PATCH_SPECS: dict[str, PatchSpec[Any, Any]] = {
         ),
         PatchSpec(
             "green_shortcut",
-            "B then Select on the shot-setup view opens the green detail view (docs/green_shortcut.md)",
+            "B then Select opens the green detail view, B then Start the scorecard (docs/green_shortcut.md)",
             NoParams,
             lambda ctx, params: green_shortcut_patch(),
         ),

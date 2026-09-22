@@ -1,18 +1,18 @@
 """
-Green detail view shortcut.
+Green detail view and scorecard shortcuts.
 
 Quality-of-life patch: from the shot-setup view, press B to bring up the ball
-lie panel and then Select, and the game jumps straight to the green detail
-view instead of making you walk the in-game menu.
+lie panel and then Select for the green detail view, or Start for the
+scorecard - instead of walking the in-game menu to either one.
 
-Why the green view is worth a shortcut
---------------------------------------
+Why these two views are worth a shortcut
+----------------------------------------
 
 Green slopes are invisible from the course-level view - the greens are drawn
 opaque, and the only way to read the break is the green detail view. That
 makes it the most-used entry in the Select menu, and `RunInGameMenu` ($96B1)
 resets `InGameMenuSelection` to 0 every time it opens ($96B3), so reaching it
-always costs Select, Down, A.
+always costs Select, Down, A. The scorecard is item 0 of the same menu.
 
 Why the gesture is "B then Select" and not a chord
 --------------------------------------------------
@@ -61,7 +61,12 @@ What gets spliced
 
 2. `$87EF`, `ShotSetupSequence`'s `JSR ShowBallLiePopup`, becomes a `JMP` into
    `GreenShortcutEntry`, which runs the panel and, on a set flag, fades to the
-   green view.
+   green view (Select) or far-calls `DrawScorecardScreen` (Start).
+
+   Start rides the poll for free: it is bit $10, next to Select's $20 in the
+   byte the poll already reads, and the existing `sta ShortcutFlag` stores the
+   isolated bit, so the flag records which button without a single extra
+   instruction. Only the two masks widened.
 
 3. The three other `JSR ShowBallLiePopup` sites become `JSR ClearFlagThenLie`,
    which zeroes the flag and tail-calls the panel. See `CLEAR_ONLY_SPLICES`.
@@ -96,8 +101,28 @@ through and open the in-game menu afterwards, and the green view's
 event. Select doesn't auto-repeat either (`ReadBothControllers` masks the
 repeat with `#$0F` at $D112), so a held Select can't double-fire.
 
-At the three clear-only sites Select now dismisses the panel early and does
-nothing else, which is what A already did there in vanilla.
+At the three clear-only sites Select and Start now dismiss the panel early and
+do nothing else, which is what A already did there in vanilla.
+
+The scorecard needs no PPU preamble
+-----------------------------------
+
+`DrawScorecardScreen` (bank 2 $AE76) does no PPU setup of its own - it goes
+straight to `LCDB3`, clears OAM and starts loading graphics. Its two vanilla
+callers set things up for it: `RunInGameMenu` writes `NametableY = 0` and
+`PpuCtrl_Cache = $B0` at $96BC before it ever reaches the dispatch.
+
+Entered from $87EF we arrive instead with gameplay's `$10 = $90` (from
+`LoadCourseViewTileset`) and whatever `$1C`/`$1D` the scrolled course view left.
+Playtested: it renders correctly anyway. `$90` and `$B0` differ only in bit 5,
+sprite size, and the scorecard blanks all 256 OAM bytes at $AE79, so no sprite
+is visible either way.
+
+That mattered for space: the preamble would cost 8 bytes and
+`GreenShortcutEntry` is at **exactly 52 of the 52** bytes bank 13's tail has.
+There is no slack left - a future change here has to find bytes elsewhere,
+from `mercy_tap_in`'s $BF83-$BFAE or by reclaiming this bank's dead
+`LD_BFF3_Mmc1ResetStub`.
 
 Coming back out reuses the code already at $87E3: fade out,
 `DrawCourseGameplayView`, fade in, `JMP $87F2`. `RunSwingSpeedPanel` redraws
@@ -166,6 +191,7 @@ _VANILLA = {
     "ResumeShotSetup": 0x87F2,
     # fixed bank
     "ControllerNewPress": 0x16,
+    "ExecuteFarCall": 0xD372,
     "FadeIn": 0xD823,
     "FadeOut": 0xD83C,
     "PopInputEvent": 0xD188,
@@ -174,7 +200,12 @@ _VANILLA = {
 }
 
 _SELECT_BIT = 0x20
+_START_BIT = 0x10
 _A_BIT = 0x80
+
+#: `ExecuteFarCall` inline arguments for bank 2's `DrawScorecardScreen` ($AE76),
+#: the same three bytes in-game menu item 0 carries at $9770.
+_SCORECARD_FAR_CALL = (0x02, 0x76, 0xAE)
 
 # --- Where the new code goes --------------------------------------------------
 
@@ -199,11 +230,11 @@ def _poll_code() -> bytes:
     """
     source = """
         LiePopupPoll:
-            and #SELECT_BIT+A_BIT   ; either button that ends the frame wait?
-            beq Continue            ; neither: fall back into the countdown
-            and #SELECT_BIT
+            and #SELECT_BIT+START_BIT+A_BIT   ; a button that ends the frame wait?
+            beq Continue            ; none: fall back into the countdown
+            and #SELECT_BIT+START_BIT
             beq Abort               ; A button: vanilla behaviour, carry set
-            sta ShortcutFlag        ; Select: A is SELECT_BIT, so this is nonzero
+            sta ShortcutFlag        ; A is the isolated bit, so it records which
         Abort:
             sec
             rts
@@ -221,7 +252,12 @@ def _poll_code() -> bytes:
     program = assemble(
         source,
         POLL_CODE_ADDR,
-        {**_VANILLA, "SELECT_BIT": _SELECT_BIT, "A_BIT": _A_BIT},
+        {
+            **_VANILLA,
+            "SELECT_BIT": _SELECT_BIT,
+            "START_BIT": _START_BIT,
+            "A_BIT": _A_BIT,
+        },
     )
     if program.size > POLL_CODE_LIMIT:
         raise ValueError(
@@ -236,8 +272,9 @@ def _entry_program() -> Program:
     Run the lie panel, then take the flag it may have set to the green view.
 
     `GreenShortcutEntry` is entered by `JMP` from $87EF, so the stack is
-    untouched and both exits are jumps back into `ShotSetupSequence` rather
-    than returns.
+    untouched and every exit is a jump back into `ShotSetupSequence` rather
+    than a return. The flag says which screen to show: $20 (Select) is the
+    green, anything else nonzero is the scorecard.
 
     `ClearFlagThenLie` is the other half: both routes into the lie panel go
     through it, so the flag is always zero when the panel opens and a Select
@@ -249,9 +286,12 @@ def _entry_program() -> Program:
             jsr ClearFlagThenLie
             lda ShortcutFlag
             beq Resume
+            cmp #SELECT_BIT
+            bne Scorecard           ; Start (or both at once): the scorecard
 
             jsr FadeOut
             jsr DrawGreenDetailView
+        AfterDraw:
             jsr FadeIn
         Wait:
             jsr PopInputEvent       ; queue was flushed at $A6BB, so this waits
@@ -261,12 +301,29 @@ def _entry_program() -> Program:
         Resume:
             jmp ResumeShotSetup
 
+        Scorecard:
+            jsr FadeOut
+            jsr ExecuteFarCall
+            .byte SCORECARD_BANK, SCORECARD_LO, SCORECARD_HI
+            jmp AfterDraw
+
         ClearFlagThenLie:
             lda #$00
             sta ShortcutFlag
             jmp ShowBallLiePopup    ; tail call: its RTS returns to our caller
     """
-    program = assemble(source, ENTRY_CODE_ADDR, _VANILLA)
+    bank, lo, hi = _SCORECARD_FAR_CALL
+    program = assemble(
+        source,
+        ENTRY_CODE_ADDR,
+        {
+            **_VANILLA,
+            "SELECT_BIT": _SELECT_BIT,
+            "SCORECARD_BANK": bank,
+            "SCORECARD_LO": lo,
+            "SCORECARD_HI": hi,
+        },
+    )
     if program.size > ENTRY_CODE_LIMIT:
         raise ValueError(
             f"GreenShortcutEntry is {program.size} bytes; only "
@@ -359,7 +416,7 @@ def green_shortcut_patch() -> CompositePatch[BytePatch]:
         name="green_shortcut",
         description=(
             "B then Select on the shot-setup view jumps straight to the green "
-            "detail view"
+            "detail view, B then Start to the scorecard"
         ),
         patches=[
             poll_routine,

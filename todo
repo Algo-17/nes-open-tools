@@ -1,9 +1,8 @@
-Non-editor:
+In-game/vanilla rom investigations:
 * Does SuperShot! do anything?
 * Do bunker lips do anything?
-* index for patch requirements/rom space usage
 
-V1 todos (lol I'm going to expand the scope of this to mean "before v2"):
+V2 todos:
 * I think I want a variant of rom name in randomizer site pages w/o the region parens
 * Configuration backups to pw manager
 * Uptime monitoring
@@ -11,11 +10,17 @@ V1 todos (lol I'm going to expand the scope of this to mean "before v2"):
 * Configure rDNS (reverse DNS)?
 * Localize/prettyfy timestamps?
 * Full horizontal scorecards on Seeds page's "Completed Rounds" table
+* Version numbers somewhere on site (copyright notice as well?)
+* Changelog
+* Anchor tag to seed results? collapse spoiler log/course details by default? idk
+* server metrics, like response times, etc.
+* Expand SRAM defaults on randomizer site (currently missing Enable BGM and more)
+* Integrate green detail shortcut patch
 
 Eventually:
 * deploy from github actions
 
-Randomizer:
+Randomizer, investigation needed:
 * Mirrored holes?
 * Randomize bunkers/water?
 * random green topography?

@@ -1,9 +1,9 @@
-# Green Detail View Shortcut
+# Green Detail View and Scorecard Shortcuts
 
 > **Note**: This document was written by Claude based on investigation requested by jdharms.
 
-From the shot-setup view, press **B** to bring up the ball lie panel and then **Select**,
-and the game jumps straight to the green detail view.
+From the shot-setup view, press **B** to bring up the ball lie panel, then **Select** for
+the green detail view or **Start** for the scorecard.
 
 Implemented as `golf/core/patches/green_shortcut.py`, applied as the `green_shortcut` step
 of `golf-patch`. The rest of this document is the analysis of the vanilla input and
@@ -15,7 +15,12 @@ Green slopes are invisible from the course-level view - the greens are drawn opa
 the only way to read the break before a shot is the green detail view. That makes it the
 most-used entry in the Select menu, and `RunInGameMenu` (`$96B1`) resets
 `InGameMenuSelection` to 0 every time it opens (`$96B3`), so reaching it always costs
-Select, Down, A.
+Select, Down, A. The scorecard is item 0 of the same menu.
+
+Start rides the same poll for free. It is bit `$10`, next to Select's `$20` in the byte the
+poll already reads, and the existing `sta ShortcutFlag` stores the *isolated* bit - so the
+flag records which button was pressed without one extra instruction. Only the two masks
+widened; the poll is still 27 bytes.
 
 ## How input actually reaches a scene
 
@@ -176,8 +181,8 @@ So the flag is cleared on the way *in*, by `ClearFlagThenLie`, which every site 
 through. Clearing after use instead would leave a Select pressed during (say) the automatic
 post-shot announcement set, to fast-forward whichever panel opened next.
 
-At those three sites Select now just dismisses the panel early and does nothing else -
-which is what A already did there in vanilla.
+At those three sites Select and Start now just dismiss the panel early and do nothing
+else - which is what A already did there in vanilla.
 
 ## The implementation
 
@@ -242,6 +247,11 @@ ClearFlagThenLie:                ; $BFDB - every call site enters the panel here
 **3. The other three lie panel call sites** become `JSR ClearFlagThenLie`, same three
 bytes.
 
+`$20` falls through to the green view; anything else nonzero takes the scorecard branch,
+which far-calls bank 2's `DrawScorecardScreen` with the same inline arguments in-game menu
+item 0 carries at `$9770`. Both branches rejoin at `AfterDraw` to share the fade-in and the
+dismiss wait.
+
 Returning is largely free. A Select abort returns carry set, so `$A695 BCS $A6AB` runs the
 panel's own tail - including the `FlushInputEvents` at `$A6BB` - *before* the green view is
 drawn. That clears the queued `$58`, so it can't leak through and open the in-game menu
@@ -272,12 +282,30 @@ Bank 13 alone could not hold both routines: after `mercy_tap_in` (`$BF83`-`$BF9F
 `$BFA0`-`$BFAE`) and `seeded_wind` (`$BFAF`-`$BFBE`), the tail has 52 bytes left and the two
 routines need 63.
 
+## The scorecard needs no PPU preamble
+
+`DrawScorecardScreen` (bank 2 `$AE76`) does no PPU setup of its own - it goes straight to
+`LCDB3`, clears OAM and starts loading graphics. Its two vanilla callers do it for it:
+`RunInGameMenu` writes `NametableY = 0` and `PpuCtrl_Cache = $B0` at `$96BC` before it ever
+reaches the dispatch.
+
+Entered from `$87EF` we arrive instead with gameplay's `$10 = $90` (set by
+`LoadCourseViewTileset`) and whatever `$1C`/`$1D` the scrolled course view left behind. `$90`
+and `$B0` differ only in bit 5, sprite size, and the scorecard blanks all 256 OAM bytes at
+`$AE79`, so no sprite is visible either way.
+
+**Playtested: it renders correctly.** Neither the pattern table nor the leftover scroll is a
+problem, so the preamble the menu performs is not actually required here. That was the one
+open question, and it mattered: the preamble costs 8 bytes and `GreenShortcutEntry` is at
+**exactly 52 of the 52 bytes** bank 13's tail has, so needing it would have meant taking
+space from `mercy_tap_in`'s `$BF83`-`$BFAE` or reclaiming this bank's dead
+`LD_BFF3_Mmc1ResetStub`.
+
+There is no slack left at all. A future change to this routine has to find bytes elsewhere.
+
 ## Status
 
-Assembled, applied to the vanilla ROM and disassembled back; unit and integration tests
-cover the layout, the splices and the `practice_swing` conflict in both orders. **Not yet
-playtested** - the render round-trip in particular (`DrawGreenDetailView` flips to
-horizontal mirroring and rewrites `PpuCtrl_Cache`, and `$87E3`'s
-`DrawCourseGameplayView` is relied on to put it back) has only been reasoned about
-statically, from the fact that the in-game menu's own exit path does the same thing from a
-different call site.
+Both halves are playtested and work: the green detail view (including the fast-forward fix
+above, which a first pass got wrong) and the scorecard. Unit and integration tests cover the
+layout, all five splices, that no route into the lie panel bypasses `ClearFlagThenLie`, and
+the `practice_swing` conflict in both orders.

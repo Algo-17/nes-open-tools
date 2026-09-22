@@ -42,8 +42,9 @@ class TestLayout:
         assert POLL_CODE_ADDR + POLL_CODE_LIMIT == 0xCB00
 
     def test_entry_code_fits_before_the_reset_stub(self):
-        # $BFF3 is LD_BFF3_Mmc1ResetStub, present in every bank.
-        assert len(_entry_code()) <= ENTRY_CODE_LIMIT
+        # $BFF3 is LD_BFF3_Mmc1ResetStub, present in every bank. With the
+        # scorecard branch this is exact - there is no slack left at all.
+        assert len(_entry_code()) == ENTRY_CODE_LIMIT == 52
         assert ENTRY_CODE_ADDR + ENTRY_CODE_LIMIT == 0xBFF3
 
     def test_splices_are_byte_neutral(self):
@@ -73,21 +74,33 @@ class TestPollRoutine:
         # SEC/RTS is what $A6E9 did, and what the A button must still reach.
         assert bytes([0x38, 0x60]) in _poll_code()
 
-    def test_masks_both_buttons_before_distinguishing_them(self):
-        # AND #$A0 first, so a frame with neither button costs one compare.
+    def test_masks_every_button_before_distinguishing_them(self):
+        # AND #$B0 (A|Select|Start) first, so a quiet frame costs one compare.
         code = _poll_code()
-        assert code[:2] == bytes([0x29, 0xA0])
-        assert bytes([0x29, 0x20]) in code
+        assert code[:2] == bytes([0x29, 0xB0])
+        assert bytes([0x29, 0x30]) in code
 
-    def test_select_is_tested_before_a(self):
-        """Order matters: `AND #$20` leaves Z set for an A-only press.
+    def test_shortcut_buttons_are_tested_before_a(self):
+        """Order matters: `AND #$30` leaves Z set for an A-only press.
 
-        Testing A first and Select second would work too, but testing the
-        masked value for A after masking for Select would not - so the
-        routine has to isolate Select and branch away before touching A.
+        Testing A first would work too, but testing the masked value for A
+        after masking for Select/Start would not - so the routine has to
+        isolate the shortcut bits and branch away before touching A.
         """
         code = _poll_code()
-        assert code.index(bytes([0x29, 0x20])) < code.index(bytes([0x8D, 0xBB, 0x05]))
+        assert code.index(bytes([0x29, 0x30])) < code.index(bytes([0x8D, 0xBB, 0x05]))
+
+    def test_the_flag_records_which_button_was_pressed(self):
+        """`STA` stores the isolated bit, so $20 means Select and $10 Start.
+
+        That is why adding Start cost the poll nothing: the mask widened and
+        the existing store carries the distinction for free.
+        """
+        code = _poll_code()
+        mask = code.index(bytes([0x29, 0x30]))
+        store = code.index(bytes([0x8D, 0xBB, 0x05]))
+        # nothing between the mask and the store can disturb A
+        assert code[mask + 2 : store] == bytes([0xF0, 0x03])
 
     def test_flags_the_shortcut_with_the_select_bit_itself(self):
         # STA $05BB with A still holding $20 - no LDA #$01 needed, and any
@@ -141,6 +154,22 @@ class TestEntryRoutine:
     def test_unset_flag_rejoins_the_vanilla_path(self):
         # $87F2 is the instruction the displaced JSR used to fall through to.
         assert bytes([0x4C, 0xF2, 0x87]) in _entry_code()
+
+    def test_select_and_start_reach_different_screens(self):
+        """$20 falls through to the green; anything else takes the scorecard."""
+        code = _entry_code()
+        cmp_select = code.index(bytes([0xC9, 0x20]))
+        assert code[cmp_select + 2] == 0xD0  # BNE Scorecard
+        # ExecuteFarCall with in-game menu item 0's own inline arguments
+        assert bytes([0x20, 0x72, 0xD3, 0x02, 0x76, 0xAE]) in code
+
+    def test_both_screens_share_the_fade_in_and_the_wait(self):
+        program = _entry_program()
+        code = program.code
+        after_draw = program.at("AfterDraw")
+        assert code[after_draw : after_draw + 3] == bytes([0x20, 0x23, 0xD8])
+        # the scorecard branch rejoins there rather than repeating it
+        assert bytes([0x4C, program.symbol("AfterDraw") & 0xFF, 0xBF]) in code
 
     def test_set_flag_draws_the_green_between_fades(self):
         code = _entry_code()
