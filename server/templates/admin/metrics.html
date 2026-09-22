@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% import "admin/_admin.html" as admin %}
+{% block title %}Metrics{% endblock %}
+{% block content %}
+  {{ admin.nav() }}
+  <h1>Metrics</h1>
+
+  <p>
+    {{ metrics.samples }} requests in the last {{ metrics.days }} days, since
+    {{ metrics.since }}. Slowest route first. Percentiles are computed from the raw
+    samples over this window, so they are exact for it.
+  </p>
+
+  <form method="get" action="/admin/metrics" class="admin-window">
+    <label for="days">Window, in days:</label>
+    <input type="number"
+           id="days"
+           name="days"
+           value="{{ metrics.days }}"
+           min="1"
+           max="{{ max_days }}">
+    <button type="submit">Show</button>
+  </form>
+
+  <div class="overflow-auto">
+    <table class="striped">
+      <thead>
+        <tr>
+          <th scope="col">Route</th>
+          <th scope="col" class="num">Requests</th>
+          <th scope="col" class="num">Errors</th>
+          <th scope="col" class="num">p50 ms</th>
+          <th scope="col" class="num">p90 ms</th>
+          <th scope="col" class="num">p99 ms</th>
+          <th scope="col" class="num">Max ms</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for timing in metrics.routes %}
+          <tr>
+            <td><code>{{ timing.method }} {{ timing.route }}</code></td>
+            <td class="num">{{ timing.count }}</td>
+            <td class="num">{{ timing.errors or "" }}</td>
+            <td class="num">{{ "%.0f"|format(timing.p50_ms) }}</td>
+            <td class="num">{{ "%.0f"|format(timing.p90_ms) }}</td>
+            <td class="num">{{ "%.0f"|format(timing.p99_ms) }}</td>
+            <td class="num">{{ "%.0f"|format(timing.max_ms) }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="7">No requests recorded in this window.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if metrics.outcomes %}
+    <h2>Outcomes</h2>
+    <p>What requests came to, where the status code alone does not say.</p>
+    <div class="overflow-auto">
+      <table class="striped">
+        <thead>
+          <tr>
+            <th scope="col">Route</th>
+            <th scope="col">Outcome</th>
+            <th scope="col" class="num">Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for outcome in metrics.outcomes %}
+            <tr>
+              <td><code>{{ outcome.route }}</code></td>
+              <td>{{ outcome.outcome }}</td>
+              <td class="num">{{ outcome.count }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  {% if metrics.trend %}
+    <h2>By day, last {{ trend_days }} days</h2>
+    <p>
+      The daily rollup is kept after the raw samples age out. This page shows its most
+      recent {{ trend_days }} days; older days remain in the database. Each day's
+      percentiles are exact for that day and cannot be combined into a longer window:
+      for that, widen the window above while the raw samples are still retained.
+    </p>
+    <div class="overflow-auto">
+      <table class="striped">
+        <thead>
+          <tr>
+            <th scope="col">Day</th>
+            <th scope="col">Route</th>
+            <th scope="col" class="num">Requests</th>
+            <th scope="col" class="num">Errors</th>
+            <th scope="col" class="num">p50 ms</th>
+            <th scope="col" class="num">p90 ms</th>
+            <th scope="col" class="num">p99 ms</th>
+            <th scope="col" class="num">Max ms</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for day in metrics.trend %}
+            <tr>
+              <td>{{ day.day }}</td>
+              <td><code>{{ day.method }} {{ day.route }}</code></td>
+              <td class="num">{{ day.count }}</td>
+              <td class="num">{{ day.errors or "" }}</td>
+              <td class="num">{{ "%.0f"|format(day.p50_ms) }}</td>
+              <td class="num">{{ "%.0f"|format(day.p90_ms) }}</td>
+              <td class="num">{{ "%.0f"|format(day.p99_ms) }}</td>
+              <td class="num">{{ "%.0f"|format(day.max_ms) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

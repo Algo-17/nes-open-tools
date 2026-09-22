@@ -13,6 +13,8 @@ first; nothing outside imports more than the names `server/admin_routes.py` uses
 import json
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from itertools import groupby
 
 from golf.qr import payload
 from golf.randomizer.catalog import Catalog, CatalogError
@@ -21,6 +23,7 @@ from . import audit
 from .db import Database
 from .rounds import Round, find_round
 from .seeds import SeedRow, load_seed
+from .timings import DAY, STAMP, DaySummary, percentile, utc_now
 from .users import User, load_user
 
 #: rows on one page of an admin list
@@ -604,3 +607,116 @@ def voided_page(db: Database, number: int = 1) -> Page[VoidedListing]:
             )
         )
     return _page(listings, number)
+
+
+# -- Timings ------------------------------------------------------------------------------
+
+#: days of raw samples the metrics page covers unless asked for another window
+METRICS_DAYS = 7
+#: days of the daily rollup the trend shows
+TREND_DAYS = 30
+
+_WINDOW_SAMPLES = """
+SELECT route, method, status, total_ms
+  FROM timings
+ WHERE created_at >= ?
+ ORDER BY route, method, total_ms
+"""
+
+_WINDOW_OUTCOMES = """
+SELECT route, outcome, count(*)
+  FROM timings
+ WHERE created_at >= ? AND outcome IS NOT NULL
+ GROUP BY route, outcome
+ ORDER BY route, count(*) DESC
+"""
+
+_TREND = """
+SELECT day, route, method, count, errors, p50_ms, p90_ms, p99_ms, max_ms
+  FROM timing_day
+ WHERE day >= ?
+ ORDER BY day DESC, route, method
+"""
+
+
+@dataclass(frozen=True)
+class RouteTiming:
+    route: str
+    method: str
+    count: int
+    errors: int
+    p50_ms: float
+    p90_ms: float
+    p99_ms: float
+    max_ms: float
+
+
+@dataclass(frozen=True)
+class OutcomeCount:
+    route: str
+    outcome: str
+    count: int
+
+
+@dataclass(frozen=True)
+class MetricsView:
+    days: int
+    since: str
+    samples: int
+    routes: list[RouteTiming]
+    outcomes: list[OutcomeCount]
+    trend: list[DaySummary]
+
+
+def _route_timings(rows: list[sqlite3.Row]) -> list[RouteTiming]:
+    """One row per route and method. `rows` is ordered by route, method, then duration."""
+    timings = []
+    for (route, method), group in groupby(rows, key=lambda row: (row[0], row[1])):
+        samples = [(row[2], row[3]) for row in group]
+        durations = [ms for _status, ms in samples]
+        timings.append(
+            RouteTiming(
+                route=route,
+                method=method,
+                count=len(samples),
+                errors=sum(1 for status, _ms in samples if status >= 400),
+                p50_ms=percentile(durations, 0.50),
+                p90_ms=percentile(durations, 0.90),
+                p99_ms=percentile(durations, 0.99),
+                max_ms=durations[-1],
+            )
+        )
+    return timings
+
+
+def metrics_view(
+    db: Database, days: int = METRICS_DAYS, now: datetime | None = None
+) -> MetricsView:
+    """Request timings over the last `days`, slowest route first, with the daily trend.
+
+    The window's percentiles are computed here from the raw samples, which is what makes
+    them exact for any window the retention still covers. The `timing_day` rows behind the
+    trend are each exact for their own day and are only ever shown as that day; a longer
+    window is never made by averaging them.
+    """
+    now = now if now is not None else utc_now()
+    since = (now - timedelta(days=days)).strftime(STAMP)
+    trend_since = (now - timedelta(days=TREND_DAYS)).strftime(DAY)
+    with db.transaction() as conn:
+        rows = conn.execute(_WINDOW_SAMPLES, (since,)).fetchall()
+        outcomes = [
+            OutcomeCount(route, outcome, count)
+            for route, outcome, count in conn.execute(_WINDOW_OUTCOMES, (since,))
+        ]
+        trend = [DaySummary(*row) for row in conn.execute(_TREND, (trend_since,))]
+    routes = sorted(
+        _route_timings(rows), key=lambda timing: timing.p99_ms, reverse=True
+    )
+    return MetricsView(
+        days=days,
+        since=since,
+        samples=len(rows),
+        routes=routes,
+        outcomes=outcomes,
+        trend=trend,
+    )

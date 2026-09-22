@@ -10,6 +10,16 @@ www.nesopengolf.com {
 nesopengolf.com {
 	encode zstd gzip
 
+	# Every request, with the duration the client actually waited. The site logs only
+	# the notable ones, with the phases inside them, which this cannot see.
+	log {
+		output file /var/log/caddy/nesopengolf.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format json
+	}
+
 	# The site's requests are small forms; nothing legitimate comes near this.
 	request_body {
 		max_size 1MB

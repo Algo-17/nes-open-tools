@@ -133,6 +133,8 @@ cannot submit.
 | `rounds` | A scan the server accepted: a unique `public_id`, the base62 id of its `/r/<id>` permalink; entry, slot, raw payload, total strokes, total putts, received_at, flagged, with an admin-only flag note. Unique on (entry, slot), which is the first-submission rule |
 | `round_holes` | round, position, strokes, putts. Joins to `seed_holes` on (seed, position) |
 | `voided_rounds` | A round an admin voided: its `public_id`, entry, slot, the payload (unique, and holding every hole, so no hole rows), received_at, its flag and note, voided_at, an admin-only note. A scan of a voided payload is refused; restoring moves it back while its slot is empty |
+| `timings` | One row per request: created_at, request ID (indexed for lookup from `X-Request-Id`), the matched route template, method, status, total milliseconds, an outcome naming what a status cannot tell apart, and a JSON detail holding the phases inside the request. Written in batches by `server/timings.py`, kept 30 days |
+| `timing_day` | The daily rollup of `timings`, per day, route and method: count, errors and the p50, p90, p99 and maximum of that day. Kept for good. Each row's percentiles are exact for its own day and are never re-aggregated into a longer window |
 | `admin_actions` | The audit log: admin, action, target type and id, the admin's note, a JSON detail object, created_at. Who withdrew or restored a seed, who flagged, voided or restored a round, and each target's complete history are read from here rather than from actor columns on the target |
 
 An entry is the record that a signed-in player has entered a seed, in the tournament
@@ -239,7 +241,8 @@ the file names in `golf/randomizer/roms.py` (`nes_open_us.nes`, `mario_open_jp.n
 base; the QR URL prefix is assembled into the port and fixed before the first public seed
 ships), the Discord client id and secret `GOLF_DISCORD_CLIENT_ID` and
 `GOLF_DISCORD_CLIENT_SECRET`, the session secret `GOLF_SESSION_SECRET`, the admin users
-`GOLF_ADMIN_USERS`, and the development login bypass `GOLF_DEV_LOGIN`.
+`GOLF_ADMIN_USERS`, the development login bypass `GOLF_DEV_LOGIN`, and the log level
+`GOLF_LOG_LEVEL`.
 
 ## Development plan
 

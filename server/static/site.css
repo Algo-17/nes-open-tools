@@ -298,3 +298,23 @@ form.admin-inline button {
   padding: calc(var(--pico-form-element-spacing-vertical) * 0.5)
     var(--pico-form-element-spacing-horizontal);
 }
+
+/* The metrics window picker: two small controls on one line, rather than the full-width
+   stack Pico gives a form by default. */
+form.admin-window {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--pico-spacing);
+  margin-bottom: var(--pico-block-spacing-vertical);
+}
+
+form.admin-window input,
+form.admin-window button {
+  width: auto;
+  margin-bottom: 0;
+}
+
+form.admin-window input {
+  max-width: 6rem;
+}

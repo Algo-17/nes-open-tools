@@ -113,13 +113,20 @@ sudo systemctl enable golf-site
 
 ### Caddy
 
-With DNS pointing at the server:
+With DNS pointing at the server. Validate before reloading: a Caddyfile that does not
+parse fails the reload and leaves the running configuration in place, but the error is
+easier to read from `validate` than from the journal.
 
 ```bash
 sudo cp /opt/golf-site/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 sudo systemctl reload caddy
 curl -fsS https://nesopengolf.com/healthz
 ```
+
+Caddy writes its access log to `/var/log/caddy/`, which its apt package creates owned by
+the `caddy` user. On a server where that directory is missing, the reload fails and
+`journalctl -u caddy` says so.
 
 ### Litestream
 
@@ -185,7 +192,13 @@ Rolling back is deploying the previous tag, which `deploy.sh` printed:
 
 `deploy.sh` never touches `/etc`. When a release changes a file under `deploy/`, install
 it again by hand as in "Setting up a server", with `sudo systemctl daemon-reload` after a
-unit file and `sudo systemctl reload caddy` after the Caddyfile.
+unit file, and for the Caddyfile:
+
+```bash
+sudo cp /opt/golf-site/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl reload caddy
+```
 
 A migration moves the database forward, and an older release refuses a database newer than
 it knows. Rolling back past a migration is restoring the database from before it.
@@ -199,7 +212,45 @@ it knows. Rolling back past a migration is restoring the database from before it
 | Start again after five failed starts in five minutes, when the unit gives up | `sudo systemctl reset-failed golf-site`, then `sudo systemctl start golf-site` |
 | Re-dump the holes and renders | `sudo systemctl restart golf-site` after deleting `/var/lib/golf-site/courses`, or any start whose check fails |
 | Caddy's log | `journalctl -u caddy` |
+| Every request, as Caddy saw it | `/var/log/caddy/nesopengolf.log`, JSON lines |
+| The site's notable requests and errors | `journalctl -u golf-site -o cat \| jq` |
+| How long the slow routes take | the `/admin/metrics` page, or the queries below |
 | Litestream's log | `journalctl -u litestream` |
+
+## Request timings
+
+The site records one row per request in the `timings` table of its own database: the
+request ID from `X-Request-Id`, route template, status, total milliseconds, what the
+request came to, and the phases inside it, such as how long a build waited for the build
+semaphore against how long it then took. `/admin/metrics` shows the percentiles; over SSH:
+
+```bash
+sudo -u golf sqlite3 /var/lib/golf-site/golf_site.db \
+  "SELECT route, count(*), round(max(total_ms)) FROM timings
+     WHERE created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')
+     GROUP BY route"
+
+# the ten slowest requests of the week, with their phases
+sudo -u golf sqlite3 /var/lib/golf-site/golf_site.db \
+  "SELECT created_at, request_id, route, round(total_ms), outcome, detail
+     FROM timings
+     WHERE created_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')
+     ORDER BY total_ms DESC LIMIT 10"
+```
+
+Raw samples are kept 30 days and the daily rollup in `timing_day` for good, so a
+percentile over any window up to a month is exact and the long trend survives. The admin
+page shows the most recent 30 days of that trend; older days remain available in SQLite. Each
+`timing_day` row's percentiles are exact for its own day and cannot be combined: a
+weekly figure comes from `timings` while its raw rows are still there, never from
+averaging stored percentiles.
+
+The site rolls up and prunes by itself, once a day, inside the flush it is already
+awake for. There is nothing to schedule.
+
+**Never `VACUUM` this database.** The prune leaves freed pages on SQLite's freelist to
+be reused, so the file plateaus rather than growing without end; a vacuum would rewrite
+every page, and Litestream would ship the whole file rather than the changes.
 
 ## Restoring the database
 

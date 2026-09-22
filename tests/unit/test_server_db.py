@@ -14,6 +14,8 @@ SCHEMA_TABLES = {
     "rounds",
     "seed_holes",
     "seeds",
+    "timing_day",
+    "timings",
     "users",
     "voided_rounds",
 }
@@ -21,6 +23,8 @@ SCHEMA_INDEXES = {
     "admin_actions_by_admin",
     "admin_actions_by_target",
     "entries_by_user",
+    "timings_by_request_id",
+    "timings_by_time",
     "voided_rounds_by_entry",
 }
 
@@ -101,7 +105,7 @@ def test_migration_two_backfills_existing_seeds_without_changing_their_artifacts
             "SELECT manifest, unfinished_ips FROM seeds WHERE id = '0000000001'"
         ).fetchone()
 
-    assert db.migrate() == 2
+    assert db.migrate(MIGRATIONS[:2]) == 2
     with db.transaction() as conn:
         after = conn.execute(
             """

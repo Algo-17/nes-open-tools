@@ -14,6 +14,7 @@ import sys
 from golf.randomizer.catalog import Catalog
 from golf.randomizer.rehydrate import RehydrateError, check_site_data
 from server.config import Config, ConfigError
+from server.logging import log_config
 
 
 def main() -> int:
@@ -49,9 +50,12 @@ def main() -> int:
 
     # --reload also restarts on content that the app reads once at startup. Behind the
     # reverse proxy, the forwarded headers are trusted from the loopback address only.
+    # uvicorn applies log_config in every worker it starts, including the child
+    # --reload spawns, where nothing configured out here would survive.
     uvicorn.run(
         "server.app:create_app",
         factory=True,
+        log_config=log_config(config.log_level),
         host=args.host,
         port=args.port,
         proxy_headers=True,

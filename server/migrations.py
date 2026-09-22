@@ -127,4 +127,39 @@ MIGRATIONS: list[str] = [
     ALTER TABLE seeds
         ADD COLUMN withdrawn_at TEXT;
     """,
+    # 3: request timings and their daily rollup
+    """
+    CREATE TABLE timings (
+        id INTEGER PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        request_id TEXT NOT NULL,
+        route TEXT NOT NULL,
+        method TEXT NOT NULL,
+        status INTEGER NOT NULL,
+        total_ms REAL NOT NULL,
+        outcome TEXT,
+        detail TEXT NOT NULL DEFAULT '{}'
+            CHECK (json_valid(detail) AND json_type(detail) = 'object')
+    );
+
+    CREATE INDEX timings_by_time ON timings (created_at);
+    CREATE INDEX timings_by_request_id ON timings (request_id);
+
+    -- Each row's percentiles are computed from the raw samples of the one day it covers,
+    -- which is exact for that day. They cannot be re-aggregated: never AVG() a p99 across
+    -- rows of this table. A window longer than a day is computed from `timings` while its
+    -- raw rows are still inside the retention window.
+    CREATE TABLE timing_day (
+        day TEXT NOT NULL,
+        route TEXT NOT NULL,
+        method TEXT NOT NULL,
+        count INTEGER NOT NULL,
+        errors INTEGER NOT NULL,
+        p50_ms REAL NOT NULL,
+        p90_ms REAL NOT NULL,
+        p99_ms REAL NOT NULL,
+        max_ms REAL NOT NULL,
+        PRIMARY KEY (day, route, method)
+    );
+    """,
 ]

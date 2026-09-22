@@ -13,6 +13,8 @@ from urllib.parse import urlsplit
 from golf.randomizer.catalog import DEFAULT_COURSES, REPO_ROOT
 from golf.rendering.rangefinder import DEFAULT_OUTPUT as DEFAULT_RANGEFINDER
 
+from .logging import DEFAULT_LEVEL, known_level
+
 PREFIX = "GOLF_"
 TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
 #: the only hosts the development login bypass may run on
@@ -42,6 +44,8 @@ class Config:
     admin_users: frozenset[str] = frozenset()
     #: the development-only login bypass
     dev_login: bool = False
+    #: the level the site logs at, as a `logging` level name
+    log_level: str = DEFAULT_LEVEL
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] = os.environ) -> "Config":
@@ -65,6 +69,7 @@ class Config:
             session_secret=get("session_secret"),
             admin_users=frozenset((get("admin_users") or "").replace(",", " ").split()),
             dev_login=(get("dev_login") or "").strip().lower() in TRUE_WORDS,
+            log_level=get("log_level") or defaults.log_level,
         )
 
     @property
@@ -85,6 +90,8 @@ class Config:
             raise ConfigError(
                 f"the development login bypass only runs on localhost, not {self.base_url}"
             )
+        if not known_level(self.log_level):
+            raise ConfigError(f"{self.log_level} is not a logging level")
         if self.discord_enabled and not self.session_secret:
             raise ConfigError(
                 "Discord sign-in needs a session secret (GOLF_SESSION_SECRET)"

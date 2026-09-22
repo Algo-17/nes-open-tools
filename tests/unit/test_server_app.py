@@ -1,5 +1,6 @@
 """The site's app: health check, home, ROM setup, generate, the seed page, downloads and static files."""
 
+import logging
 import re
 from dataclasses import replace
 from urllib.parse import parse_qs, urlsplit
@@ -43,7 +44,7 @@ def curation() -> CurationSnapshot:
 class FakeBuilder(SeedBuilder):
     """Generates for real and stores a fixed IPS instead of building, so no ROM is needed."""
 
-    def build(self, manifest: Manifest) -> bytes:
+    def build(self, manifest: Manifest, sample=None) -> bytes:
         self.built = manifest
         return IPS
 
@@ -623,7 +624,7 @@ def test_downloading_without_the_servers_rom_is_unavailable(
     catalog, curation, tmp_path
 ):
     class NoRom(SeedBuilder):
-        def build(self, manifest):
+        def build(self, manifest, sample=None):
             return IPS
 
     with app_client(
@@ -1342,3 +1343,80 @@ def test_downloading_after_a_round_finishes_with_the_new_choices_and_leaves_the_
     assert options.clubs == frozenset({Club.W3, Club.SW, Club.PT})
     assert fake_builder.credentials.keys == first_keys
     assert after == before
+
+
+# -- What the log says when the server is the problem --------------------------------------
+
+
+def test_a_missing_server_rom_is_logged_when_generating(
+    catalog, curation, tmp_path, caplog
+):
+    """Every generate answers 503 and the site looks healthy; only the log says why."""
+    missing = SeedBuilder(catalog, curation, HoleStore(), tmp_path / "missing.nes")
+    with (
+        app_client(strings=UNWRITTEN, builder=missing) as test_client,
+        caplog.at_level(logging.ERROR, logger="server.app"),
+    ):
+        post_generate(test_client)
+    assert "missing.nes" in caplog.text
+
+
+def test_a_missing_server_rom_is_logged_when_a_download_finishes(
+    catalog, curation, tmp_path, caplog
+):
+    class NoRom(SeedBuilder):
+        def build(self, manifest, sample=None):
+            return IPS
+
+    builder = NoRom(catalog, curation, HoleStore(), tmp_path / "missing.nes")
+    with app_client(strings=UNWRITTEN, builder=builder) as test_client:
+        seed_id = generate_seed(test_client)
+        with caplog.at_level(logging.ERROR, logger="server.app"):
+            post_download(test_client, seed_id)
+    assert "missing.nes" in caplog.text
+
+
+def test_a_pool_that_cannot_fill_is_logged_with_its_settings(
+    catalog, curation, tmp_path, caplog
+):
+    """Which settings could not be filled is the curation signal the refusal throws away."""
+    builder = PoolTooSmall(catalog, curation, HoleStore(), tmp_path / "x.nes")
+    with (
+        app_client(strings=UNWRITTEN, builder=builder) as test_client,
+        caplog.at_level(logging.WARNING, logger="server.app"),
+    ):
+        post_generate(test_client)
+    (found,) = [r for r in caplog.records if "no pool" in r.getMessage()]
+    assert found.levelno == logging.WARNING
+    assert hasattr(found, "settings")
+
+
+def test_discord_failing_is_logged(fake_builder, caplog):
+    with TestClient(
+        create_app(
+            DISCORD_CONFIG,
+            strings=UNWRITTEN,
+            builder=fake_builder,
+            discord=FakeDiscord(None),
+        )
+    ) as test_client:
+        state = start_discord_sign_in(test_client)
+        with caplog.at_level(logging.WARNING, logger="server.app"):
+            test_client.get("/auth/callback", params={"code": "abc", "state": state})
+    assert "Discord sign-in failed" in caplog.text
+
+
+def test_a_rejected_scan_never_logs_the_entry_keys(fake_builder, caplog):
+    """The cause of a rejection goes to the log; the MAC keys behind it never do."""
+    with dev_client(fake_builder, strings=UNWRITTEN) as test_client:
+        seed_id = entered_seed(test_client, "alice")
+        with app_state(test_client).db.transaction() as conn:
+            keys = conn.execute(
+                "SELECT key_slot0, key_slot1 FROM entries WHERE seed_id = ?", (seed_id,)
+            ).fetchone()
+        with caplog.at_level(logging.WARNING, logger="server.submissions"):
+            test_client.get(scan_path(test_client, seed_id, "alice", key=bytes(8)))
+    assert "scan rejected" in caplog.text
+    for key in keys:
+        assert key.hex() not in caplog.text
+        assert str(key) not in caplog.text

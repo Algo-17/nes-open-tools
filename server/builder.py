@@ -19,6 +19,7 @@ from golf.randomizer.manifest import Manifest, Settings
 from golf.randomizer.roms import vanilla_rom
 
 from .config import Config
+from .timings import Sample, phase
 
 
 class BuilderUnavailableError(Exception):
@@ -72,11 +73,20 @@ class SeedBuilder:
     def generate(self, settings: Settings) -> Manifest:
         return generate(self.catalog, self.curation, settings)
 
-    def build(self, manifest: Manifest) -> bytes:
-        """The seed's unfinished IPS, what the seed row stores."""
+    def build(self, manifest: Manifest, sample: Sample | None = None) -> bytes:
+        """The seed's unfinished IPS, what the seed row stores.
+
+        With a sample, the wait for the build semaphore is timed apart from the build
+        itself: a burst of requests queues here, and it is the queue that grows.
+        """
         vanilla = self.vanilla()
-        with self._builds:
-            return build_unfinished(manifest, self.catalog, self.store, vanilla).ips
+        with phase(sample, "queue"):
+            self._builds.acquire()
+        try:
+            with phase(sample, "build"):
+                return build_unfinished(manifest, self.catalog, self.store, vanilla).ips
+        finally:
+            self._builds.release()
 
     def finish(
         self,

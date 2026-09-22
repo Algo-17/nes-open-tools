@@ -9,6 +9,7 @@ from golf.randomizer.catalog import Catalog, HoleStore
 from golf.randomizer.curation import CurationSnapshot
 from server.app import create_app
 from server.config import Config
+from server.timings import Sample
 from tests.app_state import app_state
 from tests.unit.test_server_app import (
     IPS,
@@ -30,6 +31,7 @@ LISTS = (
     "/admin/rounds?flagged=true",
     "/admin/users",
     "/admin/voided",
+    "/admin/metrics",
     "/admin/activity",
 )
 
@@ -422,3 +424,43 @@ def test_acting_on_a_missing_round_is_not_found(fake_builder, action):
     with admin_client(fake_builder) as client:
         sign_in(client, "admin")
         assert post(client, f"/admin/rounds/0000000000/{action}").status_code == 404
+
+
+# -- Metrics ------------------------------------------------------------------------------
+
+
+def test_the_metrics_page_shows_a_routes_percentiles(fake_builder):
+    with admin_client(fake_builder) as client:
+        sign_in(client, "admin")
+        sink = app_state(client).timings
+        for index in range(100):
+            one = Sample(method="POST", request_id="r", route="/generate", outcome="ok")
+            one.status = 200
+            one.total_ms = float(index + 1)
+            sink.record(one)
+        sink.flush()
+        page = client.get("/admin/metrics").text
+    assert "POST /generate" in page
+    # nearest rank over 1..100 ms: p50 50, p90 90, p99 99
+    for column in (">50<", ">90<", ">99<"):
+        assert column in page.replace(" ", "").replace("\n", "")
+
+
+def test_the_metrics_page_takes_a_window(fake_builder):
+    with admin_client(fake_builder) as client:
+        sign_in(client, "admin")
+        page = client.get("/admin/metrics?days=30")
+        assert page.status_code == 200
+        assert 'max="30"' in page.text
+        assert client.get("/admin/metrics?days=0").status_code == 422
+        assert client.get("/admin/metrics?days=31").status_code == 422
+
+
+def test_the_metrics_page_counts_the_outcomes_a_status_cannot_tell_apart(fake_builder):
+    with admin_client(fake_builder) as client:
+        sign_in(client, "admin")
+        generate_seed(client)
+        app_state(client).timings.flush()
+        page = client.get("/admin/metrics").text
+    assert "<td>ok</td>" in page
+    assert "<code>/generate</code>" in page

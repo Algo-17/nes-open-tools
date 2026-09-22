@@ -15,8 +15,8 @@ in this package.
 
 - `server/app.py` has `create_app(config)`, a factory. Routes are defined inside it, except
   the admin pages' (see "Admin" below), and
-  shared objects live on `app.state`: `config`, `strings` and `rate_limiter`, and `db` and
-  `builder` once the lifespan has started. Nothing is module-level state, so each test
+  shared objects live on `app.state`: `config`, `strings` and `rate_limiter`, and `db`,
+  `builder` and `timings` once the lifespan has started. Nothing is module-level state, so each test
   builds its own app.
 - `server/builder.py`'s `SeedBuilder` is the only thing a route calls to generate, build or
   finish. It holds the catalog and curation the seed page also reads, and reads the
@@ -38,6 +38,13 @@ in this package.
 - A route a script fetches answers a refusal as JSON, `{"error": reason, "values": {...}}`,
   and the script picks the notice for `error`. A missing seed on a path ending `.json` or
   `.ips` is a JSON 404 rather than the not-found page.
+- `create_app`'s timing middleware is added last, so it wraps every other middleware and
+  times the whole server. It mints the request id, puts a `Sample` on
+  `request.state.sample` and hands it to `app.state.timings` when the response is done.
+  A route that can see a phase from the inside times it with `sample.phase("name")` and
+  names what the request came to with the local `outcome(request, reason)`; the reason is
+  the same short string the refusal already uses. `SeedBuilder.build` takes the sample so
+  the wait for the build semaphore is timed apart from the build.
 - Configuration is `server/config.py`, read from `GOLF_`-prefixed environment variables.
   A new setting is a field there, a variable in the README's "Running the site" list, and
   a line in the devplan's configuration paragraph.
@@ -62,6 +69,18 @@ in this package.
   are drawn. `seeds.creator_id` holds a `users.id`.
 - `server/entries.py` is the only code that writes `entries`, and the only place MAC keys
   are drawn. `Entry.keys` stays out of `repr`; keys never go in a page, a log or a manifest.
+- `server/timings.py` is the only code that writes `timings` and `timing_day`. A request's
+  sample is buffered in memory and written in batches by a flush task the lifespan starts,
+  never on the request path; flushing takes the database lock, so it runs through
+  `run_in_threadpool`. The first successful sweep of each day rolls all complete days up
+  into `timing_day`, in batches of `ROLLUP_DAYS`, before pruning raw samples past
+  `RETENTION_DAYS`; a partial rollup must not be followed by a prune. The raw timing row
+  keeps the request ID from `X-Request-Id` for lookup beside its log lines. The metrics
+  page's raw window cannot exceed retention; its daily trend shows the last `TREND_DAYS`
+  even though the rollup is kept for good. The windows and slow-request threshold are
+  constants, not configuration, like `GENERATE_CAPACITY` in
+  `server/ratelimit.py`. Never `VACUUM` this database: the freed pages are meant to stay
+  on the freelist, and a vacuum rewrites every page and makes Litestream ship the lot.
 - `server/audit.py` is the only code that writes `admin_actions`, the admin audit log. Its
   `record` takes the caller's connection, so an action and its log row commit together. A
   new admin action adds its name there and records a row; nothing needs a migration, and no
@@ -146,6 +165,24 @@ in this package.
 - A downloaded ROM is named `notgr_par<par>_<id>.nes` by `download_stem` in
   `server/views.py`, and reaches the script as a data attribute. A file name is data, never
   a strings entry.
+
+## Logging
+
+- `server/logging.py` holds the one configuration: JSON lines on stderr, one object per
+  record, with `ts`, `level`, `logger`, `msg`, `request_id` and whatever `extra=` carried.
+  `tools/site.py` hands `log_config(config.log_level)` to uvicorn rather than applying it,
+  because uvicorn applies it in every worker including the child `--reload` spawns, and
+  because `create_app` must not have each test's app fight over the root logger.
+- uvicorn's access log is off: Caddy logs every request with the duration the client
+  waited (`deploy/Caddyfile`), and the app logs only the notable ones - a 4xx or 5xx, an
+  unhandled exception, or a request over `SLOW_MS` - with the phases the proxy cannot see.
+- A module logs through `logging.getLogger(__name__)`. An exception caught and turned into
+  a user-facing response is logged when the server is the problem: ERROR for a
+  `BuilderUnavailableError`, WARNING for a `GenerationError` or a `DiscordError`. A
+  `FormError` is not logged - a user's mistake is counted through the sample's outcome.
+- Keys, secrets and session contents never reach a record.
+  `tests/unit/test_server_app.py` checks that a rejected scan logs its cause and not the
+  entry's MAC keys.
 
 ## Player-facing text
 
@@ -245,6 +282,12 @@ Sign-in tests build the app with `Config(dev_login=True)` and sign in with
 subclass whose `identify` returns a fixed identity (`FakeDiscord` in
 `tests/unit/test_server_app.py`). `tests/unit/test_server_auth.py` runs the real client
 against `httpx2.MockTransport`.
+
+`create_app` takes `timings=` a `TimingSink`; one built with `flush_seconds=None` is
+flushed by hand, so no background task runs during a test. Tests that read what was
+recorded call `app_state(client).timings.flush()` first, since a sample is only buffered
+until then. `tests/unit/test_server_timings.py` winds the sink's `now` by hand the way
+`test_server_ratelimit.py` winds the rate limiter's `clock`.
 
 Admin tests (`tests/unit/test_server_admin.py`) build the app with `dev_login=True` and
 `admin_users={"dev:admin"}`, and sign in as `admin`.

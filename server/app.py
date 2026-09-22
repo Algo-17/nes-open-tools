@@ -1,8 +1,11 @@
 """The FastAPI application factory and its routes. See docs/randomizer_devplan.md, "Routes"."""
 
+import asyncio
+import logging
 import secrets
+import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -43,6 +46,7 @@ from .forms import (
     player_options_from_state,
     settings_from_state,
 )
+from .logging import request_id
 from .pages import PageCatalog
 from .ratelimit import (
     GENERATE_CAPACITY,
@@ -55,6 +59,13 @@ from .seeds import insert_seed, load_seed, load_unfinished_ips
 from .static_files import CachedStaticFiles, StaticVersions
 from .strings import Strings
 from .submissions import MALFORMED, UNFINISHED, ScanError, submit_scan
+from .timings import (
+    EXCEPTION,
+    OK,
+    Sample,
+    TimingSink,
+    flush_periodically,
+)
 from .users import load_user, sign_in
 from .views import (
     download_stem,
@@ -85,6 +96,9 @@ POOL_TOO_SMALL = "pool"
 SEED_WITHDRAWN = "seed_withdrawn"
 
 #: paths a missing resource answers with JSON rather than the not-found page
+#: the route of a request that matched nothing, which would otherwise be every 404 path
+UNMATCHED = "unmatched"
+
 MACHINE_SUFFIXES = (".json", ".ips")
 
 #: the query parameter `/s/` adds for the scan that recorded the round, which the round page
@@ -97,8 +111,16 @@ SESSION_MAX_AGE = 30 * 24 * 60 * 60
 #: the name /auth/login?as= signs in as when it names none
 DEFAULT_DEV_NAME = "dev"
 #: sign_in_failed.html shows one notice per value
+log = logging.getLogger(__name__)
+
 SIGN_IN_EXPIRED = "expired"
 SIGN_IN_UNAVAILABLE = "unavailable"
+
+
+def route_template(request: Request) -> str:
+    """The matched route's path, which is what a timing row is grouped by."""
+    path = getattr(request.scope.get("route"), "path", None)
+    return path if isinstance(path, str) else UNMATCHED
 
 
 def json_refusal(
@@ -117,6 +139,7 @@ def create_app(
     builder: SeedBuilder | None = None,
     rate_limiter: RateLimiter | None = None,
     discord: DiscordClient | None = None,
+    timings: TimingSink | None = None,
 ) -> FastAPI:
     """Build the app.
 
@@ -139,12 +162,33 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         db = Database(config.database)
         try:
-            db.migrate()
+            before = db.version()
+            after = db.migrate()
+            if after != before:
+                log.info("schema migrated %d to %d", before, after)
             app.state.db = db
             app.state.builder = (
                 builder if builder is not None else SeedBuilder.from_config(config)
             )
-            yield
+            sink = timings if timings is not None else TimingSink(db)
+            app.state.timings = sink
+            flusher = (
+                asyncio.create_task(flush_periodically(sink))
+                if sink.flush_seconds is not None
+                else None
+            )
+            try:
+                yield
+            finally:
+                # A deploy restart loses nothing that has buffered since the last flush.
+                if flusher is not None:
+                    flusher.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await flusher
+                try:
+                    await run_in_threadpool(sink.flush)
+                except Exception:
+                    log.exception("could not write the last request timings")
         finally:
             db.close()
 
@@ -174,6 +218,53 @@ def create_app(
         same_site="lax",
         https_only=config.base_url.startswith("https://"),
     )
+
+    @app.middleware("http")
+    async def record_timing(request: Request, call_next):
+        """Time every request into `app.state.timings`, and log the notable ones.
+
+        Added last, so it wraps every other middleware and sees the whole server's
+        time. Caddy already logs that a request happened and how long the client
+        waited; what this adds is the outcome and the phases inside one.
+        """
+        started = time.perf_counter()
+        token = request_id.set(secrets.token_hex(8))
+        sample = Sample(method=request.method, request_id=request_id.get())
+        request.state.sample = sample
+        failed = False
+        try:
+            try:
+                response = await call_next(request)
+            except Exception:
+                failed = True
+                sample.status = 500
+                sample.outcome = EXCEPTION
+                raise
+            else:
+                sample.status = response.status_code
+                response.headers["X-Request-Id"] = sample.request_id
+                return response
+            finally:
+                sample.route = route_template(request)
+                sample.total_ms = (time.perf_counter() - started) * 1000
+                request.app.state.timings.record(sample)
+                if sample.notable:
+                    log.log(
+                        logging.ERROR if sample.status >= 500 else logging.INFO,
+                        "%s %s %d in %.0fms",
+                        sample.method,
+                        sample.route,
+                        sample.status,
+                        sample.total_ms,
+                        exc_info=failed,
+                        extra={"outcome": sample.outcome, "phases": sample.phases},
+                    )
+        finally:
+            request_id.reset(token)
+
+    def outcome(request: Request, reason: str) -> None:
+        """What a request came to, beyond its status code, for its timing row."""
+        request.state.sample.outcome = reason
 
     def sign_in_context(request: Request) -> dict:
         """What base.html's header needs on every page: the player, and where to come back to."""
@@ -283,6 +374,7 @@ def create_app(
         try:
             settings = settings_from_state(state)
         except FormError as problem:
+            outcome(request, problem.reason)
             return generate_page(
                 request, state, problem.reason, problem.values, status_code=400
             )
@@ -291,22 +383,34 @@ def create_app(
         user_id = user.id if user is not None else None
         # Only a submission that would make the server work spends a token.
         if not request.app.state.rate_limiter.allow(client_key(request, user_id)):
+            outcome(request, RATE_LIMITED)
             return generate_page(request, state, RATE_LIMITED, status_code=429)
 
         seed_builder: SeedBuilder = request.app.state.builder
         db: Database = request.app.state.db
 
+        sample: Sample = request.state.sample
+
         def create() -> str:
-            manifest = seed_builder.generate(settings)
-            unfinished_ips = seed_builder.build(manifest)
-            return insert_seed(db, manifest, unfinished_ips, creator_id=user_id)
+            with sample.phase("generate"):
+                manifest = seed_builder.generate(settings)
+            unfinished_ips = seed_builder.build(manifest, sample)
+            with sample.phase("insert"):
+                return insert_seed(db, manifest, unfinished_ips, creator_id=user_id)
 
         try:
             seed_id = await run_in_threadpool(create)
-        except GenerationError:
+        except GenerationError as problem:
+            log.warning(
+                "generation found no pool: %s", problem, extra={"settings": settings}
+            )
+            outcome(request, POOL_TOO_SMALL)
             return generate_page(request, state, POOL_TOO_SMALL, status_code=400)
-        except BuilderUnavailableError:
+        except BuilderUnavailableError as problem:
+            log.error("cannot generate: %s", problem)
+            outcome(request, UNAVAILABLE)
             return generate_page(request, state, UNAVAILABLE, status_code=503)
+        outcome(request, OK)
         return RedirectResponse(f"/h/{seed_id}", status_code=303)
 
     # Registered before the seed page, whose {seed_id} would otherwise match "<id>.json".
@@ -341,17 +445,21 @@ def create_app(
         if row is None:
             raise not_found()
         if row.withdrawn:
+            outcome(request, SEED_WITHDRAWN)
             return json_refusal(410, SEED_WITHDRAWN)
         seed_builder: SeedBuilder = request.app.state.builder
+        sample: Sample = request.state.sample
         manifest = row.manifest
         state = DownloadState.from_form(await request.form())
         try:
             check_rom_hashes(state, required_roms(manifest, seed_builder.catalog))
         except FormError as problem:
+            outcome(request, problem.reason)
             return json_refusal(403, problem.reason, problem.values)
         try:
             options = player_options_from_state(state, manifest.course.clubs)
         except FormError as problem:
+            outcome(request, problem.reason)
             return json_refusal(400, problem.reason, problem.values)
 
         db: Database = request.app.state.db
@@ -363,13 +471,17 @@ def create_app(
         user = current_user(request)
         credentials = None
         if user is not None:
-            entry = upsert_entry(db, row.id, user.id, options)
+            with sample.phase("entry"):
+                entry = upsert_entry(db, row.id, user.id, options)
             credentials = credentials_for(row.qr_seed_id, user.player_id, entry.keys)
         try:
-            patch = await run_in_threadpool(
-                seed_builder.finish, manifest, unfinished_ips, options, credentials
-            )
-        except BuilderUnavailableError:
+            with sample.phase("finish"):
+                patch = await run_in_threadpool(
+                    seed_builder.finish, manifest, unfinished_ips, options, credentials
+                )
+        except BuilderUnavailableError as problem:
+            log.error("cannot finish a download: %s", problem)
+            outcome(request, UNAVAILABLE)
             return json_refusal(503, UNAVAILABLE)
         # A withdrawal while the threadpool was finishing withholds the result. A signed-in
         # request may already have created its entry, but no ROM leaves the server.
@@ -377,7 +489,9 @@ def create_app(
         if current is None:  # pragma: no cover - seeds are never deleted
             raise not_found()
         if current.withdrawn:
+            outcome(request, SEED_WITHDRAWN)
             return json_refusal(410, SEED_WITHDRAWN)
+        outcome(request, OK)
         return Response(
             patch,
             media_type="application/octet-stream",
@@ -516,7 +630,8 @@ def create_app(
             return RedirectResponse(return_to, status_code=303)
         try:
             identity = await discord_client.identify(code, redirect_uri())
-        except DiscordError:
+        except DiscordError as problem:
+            log.warning("Discord sign-in failed: %s", problem)
             return sign_in_failed(request, SIGN_IN_UNAVAILABLE, 502)
         user = sign_in(
             request.app.state.db,

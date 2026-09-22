@@ -15,8 +15,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .admin import (
+    METRICS_DAYS,
+    TREND_DAYS,
     actions_page,
     counts,
+    metrics_view,
     round_detail,
     rounds_page,
     seed_detail,
@@ -41,6 +44,7 @@ from .seeds import (
     restore_seed,
     withdraw_seed,
 )
+from .timings import RETENTION_DAYS
 from .users import User
 
 
@@ -54,6 +58,8 @@ def require_admin(request: Request) -> User:
 
 Admin = Annotated[User, Depends(require_admin)]
 PageNumber = Annotated[int, Query(ge=1)]
+#: the metrics window cannot exceed the raw samples' retention period
+MetricsDays = Annotated[int, Query(ge=1, le=RETENTION_DAYS)]
 Note = Annotated[str, Form()]
 
 
@@ -190,6 +196,18 @@ def admin_router(templates: Jinja2Templates) -> APIRouter:
         if detail is None:
             raise not_found()
         return render(request, "user.html", {"detail": detail})
+
+    @router.get("/metrics", response_class=HTMLResponse)
+    def metrics(request: Request, days: MetricsDays = METRICS_DAYS):
+        return render(
+            request,
+            "metrics.html",
+            {
+                "metrics": metrics_view(db_of(request), days),
+                "max_days": RETENTION_DAYS,
+                "trend_days": TREND_DAYS,
+            },
+        )
 
     @router.get("/activity", response_class=HTMLResponse)
     def activity(request: Request, page: PageNumber = 1):
