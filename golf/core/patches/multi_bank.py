@@ -23,9 +23,6 @@ from .composite import CompositePatch
 #   $DB68  LDX $31
 #   $DB6A  LDA $A700,X
 #   $DB6D  NOP
-#
-# The JSR at $DB6E is left in place, so ATTR_STREAMING_BANK_SWITCH_PATCH
-# (attr_streaming.py) can redirect it independently of this patch.
 MULTI_BANK_CODE_PATCH = BytePatch(
     name="multi_bank_lookup",
     description="Change terrain bank lookup from course-based to hole-based",

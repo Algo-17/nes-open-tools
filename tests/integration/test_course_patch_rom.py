@@ -192,6 +192,6 @@ def test_refuses_vanilla_rom_without_requirements(japan_holes, tmp_path):
     patch = CoursePatch(japan_holes)
     writer = RomWriter(ROM_PATH, str(tmp_path / "unused.nes"))
     with pytest.raises(
-        PatchError, match="multi_bank_lookup, course_mirrors, attr_streaming"
+        PatchError, match="multi_bank_lookup, course_mirrors, wram_expansion"
     ):
         patch.apply(writer)

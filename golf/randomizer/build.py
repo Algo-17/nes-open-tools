@@ -2,8 +2,9 @@
 The two-stage build: a manifest into an unfinished ROM, and an unfinished ROM into a finished one.
 
 - **Unfinished**, once per seed: the base patches, the course, seeded wind, the course theme,
-  mercy tap-in, the scorecard QR image with its credential placeholders at the fill, the
-  signpost banner and the magic words on the menus and scorecard. Everything it reads is
+  mercy tap-in, the green detail view and scorecard shortcuts, the scorecard QR image with
+  its credential placeholders at the fill, the signpost banner and the magic words on the
+  menus and scorecard. Everything it reads is
   the manifest's `course`, the catalog and the hole store. The site stores the result as an
   IPS against the vanilla ROM.
 - **Finished**, per download: the player's new-save defaults under the seed's SRAM magic,
@@ -26,7 +27,6 @@ from dataclasses import dataclass
 
 from golf.core import ips, rom_utils
 from golf.core.patches import (
-    ATTR_STREAMING_PATCH,
     COURSE_MIRRORS_PATCH,
     MULTI_BANK_CODE_PATCH,
     QR_DISABLE_PATCH,
@@ -39,6 +39,7 @@ from golf.core.patches import (
     QrCredentials,
     ROMPatch,
     course_theme_patch,
+    green_shortcut_patch,
     menu_trim_patch,
     mercy_tap_in_patches,
     music_import_patch,
@@ -70,7 +71,7 @@ SIGNPOST_ART = (
 MAX_SEED_ID = (1 << (8 * payload.SEED_ID_LEN)) - 1
 MAX_PLAYER_ID = (1 << (8 * payload.PLAYER_ID_LEN)) - 1
 #: the unfinished-ROM recipe this release implements
-BUILD_VERSION = 2
+BUILD_VERSION = 3
 #: the interface current unfinished ROMs expose to the per-download finisher
 FINISH_ABI_VERSION = 1
 
@@ -187,7 +188,6 @@ def unfinished_steps(
         WRAM_EXPANSION_PATCH,
         MULTI_BANK_CODE_PATCH,
         COURSE_MIRRORS_PATCH,
-        ATTR_STREAMING_PATCH,
         CoursePatch(holes),
         seeded_wind_patch(seeds=[slot.wind_seed for slot in course.holes]),
         music_step(course.music),
@@ -201,6 +201,7 @@ def unfinished_steps(
             )
         )
     steps += [
+        green_shortcut_patch(),
         SCORECARD_QR_PATCH,
         signpost_banner_patch(RomReader.from_bytes(vanilla), SIGNPOST_ART),
         scorecard_course_name_patch(title=scorecard_title(course.magic_words)),

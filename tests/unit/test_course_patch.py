@@ -6,9 +6,9 @@ import pytest
 
 from golf.core import rom_utils
 from golf.core.patches import (
-    ATTR_STREAMING_PATCH,
     COURSE_MIRRORS_PATCH,
     MULTI_BANK_CODE_PATCH,
+    WRAM_EXPANSION_PATCH,
     BytePatch,
     CompositePatch,
     CoursePatch,
@@ -248,7 +248,7 @@ class TestCoursePatch:
         assert list(CoursePatch.requires) == [
             MULTI_BANK_CODE_PATCH,
             COURSE_MIRRORS_PATCH,
-            ATTR_STREAMING_PATCH,
+            WRAM_EXPANSION_PATCH,
         ]
 
     def test_building_raises_when_the_course_does_not_fit(self):
@@ -298,7 +298,7 @@ class TestCoursePatch:
         MULTI_BANK_CODE_PATCH.apply(rom)
         COURSE_MIRRORS_PATCH.apply(rom)
 
-        assert course.missing_requirements(rom) == [ATTR_STREAMING_PATCH]
-        with pytest.raises(PatchError, match="requires attr_streaming"):
+        assert course.missing_requirements(rom) == [WRAM_EXPANSION_PATCH]
+        with pytest.raises(PatchError, match="requires wram_expansion"):
             course.apply(rom)
         assert not course.is_applied(rom)

@@ -121,8 +121,8 @@ This means the JP dumper must use `terrain_bank` for both terrain AND greens, no
 
 ### Attribute Size
 
-- **US**: 72 bytes per hole (8 rows × 9 bytes, or similar)
-- **JP**: 90 bytes per hole (10 rows × 9 bytes, or similar)
+- **US**: 72 bytes per hole (12 attribute rows × 6 bytes, covering 48 terrain rows)
+- **JP**: 90 bytes per hole (15 attribute rows × 6 bytes, covering 60 terrain rows)
 
 **Decision: truncation is not viable.** JP courses are taller than US courses precisely
 because they use the extra 18 bytes (2 attribute rows) — that's real palette data covering
@@ -130,7 +130,7 @@ real terrain, not padding. Truncating to 72 bytes silently drops the bottom two 
 rows of any JP hole tall enough to need them, which corrupts palette assignment on import
 for exactly the holes we care about extracting. This is not a "try it and see" question;
 it's ruled out by construction. The only viable path is expanding the US engine to support
-90 bytes (see Task 5 / Option C, now the only option).
+90 bytes (see Task 5).
 
 The 72-byte assumption is baked into more than JSON serialization — it's a hardcoded read
 length and hardcoded pack/truncate boundary in the current codebase (see Task 5).
@@ -327,40 +327,28 @@ def dump_jp_course(rom: RomReader, course_idx: int, output_dir: Path):
 
 ### Task 5: Expand attribute size to 90 bytes (US ROM patch)
 
-Truncation is not an option (see "Attribute Size" above) — the US engine must be patched
-to support 90-byte attributes. The approach: stream attributes directly from ROM via a
-banked pointer instead of copying into a fixed-size RAM buffer.
+Truncation is not an option (see "Attribute Size" above), so the US engine is patched
+to support 90-byte attributes. Vanilla copies each hole's attributes from the terrain bank
+into `TerrainAttrs`, a 72-byte buffer in internal RAM at `$0533`-`$057A`, when the hole
+loads. `relocate_attr_buffer` (`golf/core/patches/wram_expansion/relocate_attr_buffer.py`,
+part of `wram_expansion`) moves that buffer to 90 bytes of WRAM at `$6F9C`-`$6FF5` and
+copies 90 bytes instead of 72. Every access to the buffer is an absolute,Y instruction, so
+the patch changes only operands: the copy loop's count and store, three reads in the
+`LE451` windowing routine and one in the `LEED5` ball-lie calculation. See
+`docs/wram_expansion.md` for why that WRAM is free during play.
 
-`scratch/attrs_patch.py` already implements this:
-- Adds `LoadTerrainAttrBanked` (17 bytes of new code) at free space `$E1B0` (PRG offset
-  `$3E1B0`), which preserves/restores the current bank while reading attribute data.
-- Repoints `LoadTerrain`'s pointer-low/high stores from the old RAM buffer target to a new
-  `AttrDataPtr` at RAM `$47`-`$48`, plus a new `AttrDataBank` byte at `$49`.
-- NOPs out the old 10-byte copy loop at `$DB96`-`$DB9F` (`LDY #$47 / LDA (ptr),Y / STA buf,Y / DEY / BPL`)
-  since attributes are read on demand instead of bulk-copied.
-- Can emit either a direct-patched ROM (`apply_patch`) or an IPS patch file (`create_ips`).
+The attributes stay in RAM rather than being read out of the terrain bank on demand.
+`LEED5` runs once per probe in the pre-swing perspective view's 1,280-probe grid (bank 9
+`$8848`), so reading from the terrain bank costs two bank switches per probe. The NMI
+handler skips the music tick whenever it lands during a bank switch (`BankSwitchLock`,
+`$D2EB`). An earlier patch that streamed the attributes that way dropped about 20 music
+ticks on the switch to the perspective view, an audible stutter; vanilla and the WRAM
+buffer drop 0-1. See "Attribute Buffer" in `docs/wram_expansion.md` for the measurement.
 
-This has already been generated and applied once — `attrs_patch.nes` in the repo root
-(gitignored) differs from `nes_open_us.nes` by exactly 67 bytes, matching this patch's
-footprint. The patch has been tested in-game against the existing 72-byte US holes with
-no regressions. It has **not** been tested with actual 90-byte attribute data, because
-the rest of the toolchain (JP dumper, attribute pipeline changes below) needed to produce
-a 90-byte hole to inject doesn't exist yet — that testing is blocked on Tasks 1-4, not on
-the patch itself.
-
-`scratch/wram_analyze.py` (a static 6502 disassembly scanner for WRAM accesses) was used
-to confirm `$47`-`$49` is safe to repurpose for `AttrDataPtr`/`AttrDataBank`.
-
-Once the RAM read path is patched, the software-side hardcoded 72-byte assumptions also
-need to change:
-- `golf/core/palettes.py`: `ATTR_TOTAL_BYTES = 72` — used as a fixed read length in
-  `tools/dump.py` regardless of actual hole height.
-- `golf/core/packing.py`: `pack_attributes` pads/truncates its output to exactly 72 bytes
-  (`while len(output) < 72: ...`, `return bytes(output[:72])`).
-
-Both need to become height-driven (attribute row count depends on the hole's actual
-terrain height) rather than a hardcoded constant, for JP-derived holes to round-trip
-correctly through the pipeline.
+On the software side, `pack_attributes` (`golf/core/packing.py`) returns the real byte
+count for the hole's attribute row count. `ATTR_TOTAL_BYTES = 72` (`golf/core/palettes.py`)
+remains the US dumper's fixed read length in `golf/core/course_dump.py`, which covers every
+US hole, since none is taller than 48 rows.
 
 ## Verification Checklist
 
@@ -389,10 +377,9 @@ golf/
 │   ├── packing.py             # pack_attributes returns the real byte count for the
 │   │                          # given attribute row count, no fixed-size padding
 │   └── patches/
-│       ├── multi_bank.py      # Per-hole terrain bank lookup; its splice ends just
-│       │                      # before the $DB6E JSR that attr_streaming redirects
-│       └── attr_streaming.py  # Streams attributes from ROM instead of a fixed
-│                               # 72-byte RAM buffer copy
+│       ├── multi_bank.py      # Per-hole terrain bank lookup
+│       └── wram_expansion/
+│           └── relocate_attr_buffer.py  # 90-byte attribute buffer in WRAM
 tools/
 ├── dump.py                    # US dumper
 └── dump_jp_courses.py         # JP dumper (golf-dump-jp)
@@ -405,16 +392,11 @@ tools/
    Verified against the real JP ROM: each course's 18 values form a clean 1-18
    permutation. Added to `jp_rom_utils.py`.
 
-2. **Attrs streaming patch**: Done, and no longer blocked on missing plumbing.
-   Converted to the declarative patch framework as `golf/core/patches/attr_streaming.py`.
-   It applies with or without `MULTI_BANK_CODE_PATCH`, whose splice at `$DB68`-`$DB6D`
-   ends just before the `JSR` at `$DB6E` that attr streaming redirects. Verified byte-identical to the hand-tested `attrs_patch.nes` when
-   applied without multi-bank. `pack_attributes` no longer pads/truncates to 72 bytes -
-   it returns the real byte count for the hole's actual attribute row count.
-   `CoursePatch` (`golf/core/patches/courses.py`) requires the streaming patch set for every
-   course.
+2. **90-byte attributes**: Done - `relocate_attr_buffer`, part of `wram_expansion` (see
+   Task 5). `CoursePatch` (`golf/core/patches/course.py`) requires `wram_expansion` for
+   every course.
 
-   A **new** blocker turned up while testing an actual 60-row JP hole end-to-end: the
+   Testing an actual 60-row JP hole end-to-end also found that the
    vanilla terrain decompression buffer in WRAM is only sized for 48 rows (1,056 bytes
    = 22 x 48), with the greens buffer packed immediately after it. 6 of the 90 JP holes
    exceed 48 rows (max 60). The written ROM's compressed data is correct - verified

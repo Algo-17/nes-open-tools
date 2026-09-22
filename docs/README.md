@@ -29,7 +29,6 @@ One line per document. Command-line tools are indexed in the top-level `README.m
 | [hud_course_abbrev.md](hud_course_abbrev.md) | The course abbreviation in the in-game HUD |
 | [music_format.md](music_format.md) | The audio engine and track format, including inserting tracks |
 | [topspin.md](topspin.md) | Why the TOP 1 / TOP 2 spin settings have no effect on play |
-| [curiosity.md](curiosity.md) | Parked side findings, not yet investigated |
 
 ## Patches
 

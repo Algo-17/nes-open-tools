@@ -8,7 +8,6 @@ import pytest
 
 from golf.core import ips
 from golf.core.patches import (
-    ATTR_STREAMING_PATCH,
     COURSE_MIRRORS_PATCH,
     MULTI_BANK_CODE_PATCH,
     QR_DISABLE_PATCH,
@@ -64,7 +63,6 @@ def full_steps(course) -> list[ROMPatch]:
         WRAM_EXPANSION_PATCH,
         MULTI_BANK_CODE_PATCH,
         COURSE_MIRRORS_PATCH,
-        ATTR_STREAMING_PATCH,
         course,
         menu_trim_patch("RANDO GOLF 0001"),
         scorecard_course_name_patch(title="RANDOMIZER 0001"),
@@ -168,11 +166,11 @@ def test_a_missing_requirement_is_reported(vanilla, course):
     with pytest.raises(
         StackError, match=r"'course' requires course_mirrors \(not in the stack\)"
     ):
-        PatchStack([MULTI_BANK_CODE_PATCH, ATTR_STREAMING_PATCH, course]).build(vanilla)
+        PatchStack([MULTI_BANK_CODE_PATCH, WRAM_EXPANSION_PATCH, course]).build(vanilla)
 
 
 def test_a_requirement_listed_too_late_is_reported(vanilla, course):
-    steps = [MULTI_BANK_CODE_PATCH, ATTR_STREAMING_PATCH, course, COURSE_MIRRORS_PATCH]
+    steps = [MULTI_BANK_CODE_PATCH, WRAM_EXPANSION_PATCH, course, COURSE_MIRRORS_PATCH]
     with pytest.raises(
         StackError, match=r"'course' requires course_mirrors \(listed after it\)"
     ):
@@ -184,7 +182,7 @@ def test_an_unchecked_write_over_course_data_is_refused(vanilla, course):
     steps = [
         MULTI_BANK_CODE_PATCH,
         COURSE_MIRRORS_PATCH,
-        ATTR_STREAMING_PATCH,
+        WRAM_EXPANSION_PATCH,
         course,
         RawWrite("stomp", first_write.prg_offset, b"\xff"),
     ]
@@ -204,7 +202,7 @@ def test_a_modified_base_is_refused(vanilla):
 
 def test_a_prepatched_base_satisfies_requirements(vanilla, course):
     base = (
-        PatchStack([MULTI_BANK_CODE_PATCH, COURSE_MIRRORS_PATCH, ATTR_STREAMING_PATCH])
+        PatchStack([MULTI_BANK_CODE_PATCH, COURSE_MIRRORS_PATCH, WRAM_EXPANSION_PATCH])
         .build(vanilla)
         .rom
     )

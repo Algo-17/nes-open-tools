@@ -44,11 +44,11 @@ UNFINISHED_ORDER = [
     "wram_expansion",
     "multi_bank_lookup",
     "course_mirrors",
-    "attr_streaming",
     "course",
     "seeded_wind",
     "music_import",
     "mercy_tap_in",
+    "green_shortcut",
     "scorecard_qr",
     "signpost_random_banner",
     "scorecard_course_name",
@@ -147,7 +147,7 @@ def test_the_unfinished_build_is_deterministic(
     assert build_unfinished(jp_manifest, catalog, store, vanilla).ips == unfinished.ips
 
 
-def test_build_version_two_golden_unfinished_ips_hashes(
+def test_build_version_three_golden_unfinished_ips_hashes(
     unfinished, jp_manifest, nes_manifest, catalog, store, vanilla
 ):
     assert any(str(slot.id) == "jp_france/18" for slot in jp_manifest.course.holes)
@@ -156,8 +156,8 @@ def test_build_version_two_golden_unfinished_ips_hashes(
         "jp_france_18": hashlib.sha256(unfinished.ips).hexdigest(),
         "nes_only": hashlib.sha256(nes.ips).hexdigest(),
     } == {
-        "jp_france_18": "aa425a7f6a0822a79fa11cb0192d45464819430b27602dbf49e31e529ff105a1",
-        "nes_only": "ba05c9227e2e8b0b8bd590f386cacfdd9c9686e80d3dc094154be36930cf949d",
+        "jp_france_18": "b151ced21516450c173cef3aac2cee52279b7a7c29c0f3bd3ac179ae9006ed22",
+        "nes_only": "b6f073f244d99a75e6af2c48ec63bbeab3ffc53bd036352e146e82bd1fa83fd4",
     }
 
 

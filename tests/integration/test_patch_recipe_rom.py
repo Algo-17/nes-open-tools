@@ -10,9 +10,9 @@ import pytest
 
 from golf.core import ips
 from golf.core.patches import (
-    ATTR_STREAMING_PATCH,
     COURSE_MIRRORS_PATCH,
     MULTI_BANK_CODE_PATCH,
+    WRAM_EXPANSION_PATCH,
     CoursePatch,
     PatchStack,
     QrCredentials,
@@ -50,7 +50,6 @@ def full_recipe(courses: Path) -> dict:
             {"patch": "wram_expansion"},
             {"patch": "multi_bank_lookup"},
             {"patch": "course_mirrors"},
-            {"patch": "attr_streaming"},
             {"patch": "course", "course": str(courses / "jp" / "jp_uk")},
             {"patch": "menu_trim", "words": ["RANDO", "GOLF", "0001"]},
             {"patch": "signpost_random_banner", "art": str(ART.relative_to(ROOT))},
@@ -89,7 +88,7 @@ def test_a_recipe_builds_the_same_rom_as_the_stack_it_describes(
             "steps": [
                 {"patch": "multi_bank_lookup"},
                 {"patch": "course_mirrors"},
-                {"patch": "attr_streaming"},
+                {"patch": "wram_expansion"},
                 {"patch": "course", "course": str(vanilla_courses / "japan")},
                 {"patch": "seeded_wind", "seed": "same"},
             ]
@@ -105,7 +104,7 @@ def test_a_recipe_builds_the_same_rom_as_the_stack_it_describes(
         [
             MULTI_BANK_CODE_PATCH,
             COURSE_MIRRORS_PATCH,
-            ATTR_STREAMING_PATCH,
+            WRAM_EXPANSION_PATCH,
             CoursePatch(holes),
             seeded_wind_patch("same"),
         ]
@@ -164,7 +163,7 @@ def test_cli_finishes_an_unfinished_rom_with_credentials(
         "-p",
         "course_mirrors",
         "-p",
-        "attr_streaming",
+        "wram_expansion",
         "-p",
         f"course:course={vanilla_courses / 'japan'}",
         "-p",
@@ -204,7 +203,7 @@ def test_cli_inline_steps_match_their_saved_recipe(vanilla_courses, tmp_path):
         "-p",
         "course_mirrors",
         "-p",
-        "attr_streaming",
+        "wram_expansion",
         "-p",
         f"course:course={vanilla_courses / 'japan'}",
         "-p",

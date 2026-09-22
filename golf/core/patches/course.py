@@ -27,8 +27,8 @@ The data is only playable on a ROM carrying three other patches, listed in
   looked up per hole
 - `course_mirrors`: every course slot plays holes 0-17; slots 18-53 are never
   written
-- `attr_streaming`: attributes are written at their real size, which can exceed
-  the vanilla 72-byte buffer
+- `wram_expansion`: terrain and attributes are written at their real size, which
+  can exceed the vanilla 48-row terrain buffer and 72-byte attribute buffer
 
 Bank 2's terrain region is left to other patches (the scorecard QR image lives
 there), and so are the metadata slots for holes 18-53 (`seeded_wind` keeps its
@@ -45,9 +45,9 @@ from golf.core.packing import int_to_bcd, pack_attributes
 from golf.core.rom_writer import BankOverflowError
 from golf.formats.hole_data import HoleData
 
-from .attr_streaming import ATTR_STREAMING_PATCH
 from .base import ROMPatch
 from .multi_bank import COURSE_MIRRORS_PATCH, MULTI_BANK_CODE_PATCH
+from .wram_expansion import WRAM_EXPANSION_PATCH
 
 # Terrain bank boundaries - each bank has lookup tables that limit the terrain region
 TERRAIN_BOUNDS = {
@@ -318,7 +318,7 @@ class CoursePatch(ROMPatch):
 
     name = "course"
     description = "Write one 18-hole course, packed across terrain banks 0 and 1"
-    requires = (MULTI_BANK_CODE_PATCH, COURSE_MIRRORS_PATCH, ATTR_STREAMING_PATCH)
+    requires = (MULTI_BANK_CODE_PATCH, COURSE_MIRRORS_PATCH, WRAM_EXPANSION_PATCH)
 
     def __init__(self, holes: Sequence[HoleData]):
         if len(holes) != rom_utils.HOLES_PER_COURSE:

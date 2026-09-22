@@ -39,10 +39,8 @@ $DB6D  EA          NOP                           ; 1 byte
 $DB6E  20 52 D3    JSR BankSwitchRoutine         ; untouched
 ```
 
-The patch stops before the `JSR` at `$DB6E`. The attr-streaming patch set
-(`golf/core/patches/attr_streaming.py`) redirects that `JSR` to its
-`SaveBankAndSwitch` routine, so the two patches apply independently and in either
-order.
+The patch stops before the `JSR` at `$DB6E`, which switches to the hole's terrain bank.
+The attribute copy that follows in `LoadTerrainAndAttrs` reads from that same bank.
 
 ### Patch Bytes
 
@@ -112,7 +110,7 @@ them first:
 
 1. **`multi_bank_lookup`** at `$DB68`: 6 bytes to change bank lookup from course-based to hole-based
 2. **`course_mirrors`**: every course slot plays holes 0-17
-3. **`attr_streaming`**: attributes are written at their real size, which can exceed the vanilla 72-byte buffer
+3. **`wram_expansion`**: terrain and attributes are written at their real size, which can exceed the vanilla 48-row terrain buffer and 72-byte attribute buffer (`docs/wram_expansion.md`)
 
 The multi-bank and mirror patches are defined in `golf/core/patches/multi_bank.py`.
 

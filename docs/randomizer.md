@@ -482,7 +482,7 @@ so really they can be considered part of the `catalog`, to some extent.
 from the randomizer *entirely*, due to non-technical reasons.
 
 Base:
-* attr streaming + WRAM Expansion (Contains several smaller patches)
+* WRAM Expansion (Contains several smaller patches)
 * Multi-Bank Courses (Allows a course to be split across banks. Includes course "mirroring".)
 
 Randomization & Course:
@@ -493,6 +493,7 @@ Randomization & Course:
 QOL:
 * Mercy rule tap-ins
 * Scorecard QR Submission
+* Two-button shortcuts to green view and scorecard
 
 Fit & Finish:
 * Signpost - Random banner

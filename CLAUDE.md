@@ -72,7 +72,8 @@ boundaries, and uses only banks 0 and 1 for terrain. Full details: the `nes-open
 **One course per ROM**: `golf-write` writes a single 18-hole course with `CoursePatch`,
 packing terrain across banks 0 and 1 with a per-hole bank table at $A700 in bank 3. The
 patch requires `multi_bank_lookup`, `course_mirrors` (every course slot plays course 1)
-and `attr_streaming`, which `golf-write` applies first. See `docs/multi_bank_terrain.md`.
+and `wram_expansion` (terrain and attribute buffers sized for 60-row holes), which
+`golf-write` applies first. See `docs/multi_bank_terrain.md`.
 
 **Building ROMs**: `golf-patch` builds a ROM or IPS patch from a JSON recipe and/or inline
 `-p` steps through `PatchStack`, which checks the base ROM hash, each patch's `requires`,

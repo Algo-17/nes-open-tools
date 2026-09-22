@@ -21,7 +21,6 @@ from golf.core.rom_reader import RomReader
 from golf.formats.hole_data import HoleData
 from golf.qr.port import layout as qr_layout
 
-from .attr_streaming import ATTR_STREAMING_PATCH
 from .base import ROMPatch
 from .composite import CompositePatch
 from .course import CoursePatch
@@ -333,7 +332,7 @@ PATCH_SPECS: dict[str, PatchSpec[Any, Any]] = {
     for spec in [
         PatchSpec(
             "wram_expansion",
-            "Grow the terrain buffer past 48 rows (docs/wram_expansion.md)",
+            "Grow the terrain and attribute buffers past 48 rows (docs/wram_expansion.md)",
             NoParams,
             _fixed(WRAM_EXPANSION_PATCH),
         ),
@@ -348,12 +347,6 @@ PATCH_SPECS: dict[str, PatchSpec[Any, Any]] = {
             "Make every course slot play course 1",
             NoParams,
             _fixed(COURSE_MIRRORS_PATCH),
-        ),
-        PatchSpec(
-            "attr_streaming",
-            "Stream terrain attributes from ROM, lifting the 72-byte limit",
-            NoParams,
-            _fixed(ATTR_STREAMING_PATCH),
         ),
         PatchSpec(
             "course",

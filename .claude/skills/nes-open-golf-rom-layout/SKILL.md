@@ -96,9 +96,12 @@ All addresses are CPU addresses in the fixed bank.
 
 ### Terrain Data
 - Width: 22 tiles (fixed)
-- Height: 30-48 rows (always even)
-- Stored compressed, followed by 72 bytes of attribute data
+- Height: 30-48 rows in vanilla, up to 60 in JP-derived holes (always even)
+- Stored compressed, followed by the hole's attribute data: 72 bytes in vanilla, the
+  real size when `CoursePatch` writes it (6 bytes per 4 terrain rows, 90 for 60 rows)
 - Attributes: 11 columns × variable rows (ceil(terrain_height/2))
+- At hole load the attributes are copied to RAM: `TerrainAttrs` at $0533 (72 bytes) in
+  vanilla, WRAM $6F9C (90 bytes) under `wram_expansion` (`docs/wram_expansion.md`)
 
 ### Greens Data
 - Size: 24×24 tiles (576 tiles total)

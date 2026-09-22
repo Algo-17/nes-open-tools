@@ -35,7 +35,8 @@ time touches it. So the build is split at the manifest boundary and no job queue
 needed:
 
 - **Unfinished.** Run once at generation time: the base patches, the course, seeded
-  wind, music, mercy tap-in, the magic words on the menus and scorecard, signpost, and the
+  wind, music, mercy tap-in, the green detail view and scorecard shortcuts, the magic
+  words on the menus and scorecard, signpost, and the
   scorecard QR image with its credential placeholders unfilled. The manifest also carries
   the seed's SRAM magic, which only finishing writes. The result is stored as an IPS blob
   on the seed row. The server rejects QR code submissions with all-zero seed IDs, so an

@@ -9,15 +9,15 @@ and builds it in memory.
 
 ```python
 from golf.core.patches import (
-    ATTR_STREAMING_PATCH, COURSE_MIRRORS_PATCH, MULTI_BANK_CODE_PATCH,
+    COURSE_MIRRORS_PATCH, MULTI_BANK_CODE_PATCH, WRAM_EXPANSION_PATCH,
     CoursePatch, PatchStack, seeded_wind_patch,
 )
 
 course = CoursePatch(holes)                  # 18 HoleData
 stack = PatchStack([
+    WRAM_EXPANSION_PATCH,
     MULTI_BANK_CODE_PATCH,
     COURSE_MIRRORS_PATCH,
-    ATTR_STREAMING_PATCH,
     course,
     seeded_wind_patch("my seed"),
 ])
@@ -143,7 +143,6 @@ A recipe is a stack written as JSON (`golf/core/patches/recipe.py`):
     {"patch": "wram_expansion"},
     {"patch": "multi_bank_lookup"},
     {"patch": "course_mirrors"},
-    {"patch": "attr_streaming"},
     {"patch": "course", "course": "courses/jp/jp_uk"},
     {"patch": "menu_trim", "words": "RANDO GOLF 0001"},
     {"patch": "mercy_tap_in", "mercy_point": 9},
@@ -176,7 +175,7 @@ In Python: `Recipe.load(path)`, `Recipe.from_dict(data, base_dir)`, `recipe.stac
 ```bash
 golf-patch nes_open_us.nes recipe.json -o out.nes
 golf-patch nes_open_us.nes recipe.json --ips out.ips
-golf-patch nes_open_us.nes -p multi_bank_lookup -p course_mirrors -p attr_streaming \
+golf-patch nes_open_us.nes -p wram_expansion -p multi_bank_lookup -p course_mirrors \
     -p course:course=courses/japan -p seeded_wind:seed=abc -o out.nes
 golf-patch --list
 ```
@@ -206,8 +205,7 @@ three requirements and the `course` step.
 | `wram_expansion` | | |
 | `multi_bank_lookup` | | |
 | `course_mirrors` | | |
-| `attr_streaming` | | |
-| `course` | `course` (a directory) or `holes` (18 files); also writes the scorecard totals | `multi_bank_lookup`, `course_mirrors`, `attr_streaming` |
+| `course` | `course` (a directory) or `holes` (18 files); also writes the scorecard totals | `multi_bank_lookup`, `course_mirrors`, `wram_expansion` |
 | `menu_trim` | `words` (default `OPEN GOLF RANDO`; three words of 4-6 renderable characters for the header of the main, player count and course select menus) | |
 | `scorecard_course_name` | `name` (default `RANDOM`; A-Z, 0-9 and space, at most 13), `title` (optional, replaces `18H STROKE PLAY`; at most 26) | `course_mirrors` |
 | `remove_course_banner` | | |

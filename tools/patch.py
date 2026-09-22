@@ -27,7 +27,7 @@ EXAMPLES = """
 examples:
   golf-patch nes_open_us.nes recipe.json -o out.nes
   golf-patch nes_open_us.nes recipe.json --ips out.ips --validate-only -v
-  golf-patch nes_open_us.nes -p multi_bank_lookup -p course_mirrors -p attr_streaming \\
+  golf-patch nes_open_us.nes -p wram_expansion -p multi_bank_lookup -p course_mirrors \\
       -p course:course=courses/japan -p seeded_wind:seed=abc -o out.nes
   golf-patch nes_open_us.nes -p practice_swing:hold_frames=0x60 --save-recipe practice.json
   golf-patch --list

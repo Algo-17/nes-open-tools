@@ -18,13 +18,15 @@ that's an implementation detail that doesn't affect this plan, so addresses belo
 given as offsets from `$6000` (e.g. "`$1186`" means CPU `$7186`) matching how they're
 referenced in-game via the `SramPtr` pointer.
 
-This document plans the two patches needed to fix this:
+This document plans the patches needed to fix this:
 
 1. **Reclaim WRAM immediately before the vanilla terrain buffer.** That space
    currently holds long-term player stats (longest drive, average round score, etc.)
    and replay data - state that isn't needed during hole play.
 2. **Move the terrain buffer "up" into the reclaimed space** so it (and the greens
    buffer after it) can grow to fit a full 60 rows.
+3. **Move the terrain attribute buffer into the reclaimed space** so it can grow from
+   72 bytes to the 90 a 60-row hole needs (see "Attribute Buffer").
 
 ## What We Know
 
@@ -71,7 +73,10 @@ This document plans the two patches needed to fix this:
     Each row's address plus size equals the next row's address, ending exactly at
     `$1186`.
 - 490 bytes reclaimable comfortably covers the 264-byte minimum need for 60-row
-  terrain, leaving **226 bytes** of margin for anything taller than 60 rows later.
+  terrain, leaving 226 bytes at `$0F9C`-`$107D`. The attribute buffer takes the first
+  90 (`$0F9C`-`$0FF5`, see "Attribute Buffer" below), leaving **136 bytes**
+  (`$0FF6`-`$107D`) of margin directly below the terrain buffer for anything taller
+  than 60 rows later.
 - `L8_9B43` (CPU `$9B43`, bank `$08`), the routine hit when a birdie is recorded,
   appends a packed `($065D:$065E)` byte to the appropriate `*ReplayHeaders` 5-slot
   FIFO (shifting out the oldest entry if full) and copies a corresponding block from
@@ -101,6 +106,33 @@ This document plans the two patches needed to fix this:
   way a per-shot/per-round save could) and left unpatched; if this assumption ever
   needs re-checking, a live breakpoint on PC `$B061` during new-game setup would
   confirm when it actually fires.
+- The only reader of the replay region is `InitializeHoleReplay` (`$F6CE`, fixed
+  bank), and it is unreachable once `STUB_REPLAY_HEADER_READ_PATCH` is applied.
+  `find-refs` on `$6F9C` returns only its two `LDA $6F9C,X` reads (`$F6E5`/`$F6EE`),
+  which unpack a header byte into course (top 3 bits) and hole (low 5 bits). It then
+  follows `ReplayDataPointers` (`$F74E`) into `$0FB0`-`$10D1`. X is a replay index
+  0-19, so the header reads stay within `$0F9C`-`$0FAF`. Its one caller is `$B43D`
+  in `OpenHallOfFameHolesScreen` (bank `$0E`), at the end of this chain:
+  1. `SelectHallOfFameCategory` (`$B453`) sets the category in `$0727` (0-3).
+  2. `SelectHallOfFameReplaySlot` (`$B54E`) sets the slot in `$0728` (0-4). Its
+     setup, `SetUpReplaySlotScreen` (`$B5E8`), calls `LoadReplayHeaders`
+     (`$B689`), which copies the category's 5 header bytes into `$0729`-`$072D`.
+  3. The A-button handler `LE_B5B4_ConfirmReplaySlot` (`$B5B4`) accepts the slot
+     only when `$0729,X` has bit 7 clear; otherwise it plays error sfx `$20` and
+     stays on the list. On acceptance, `ComputeReplayIndex` (`$B5DA`) stores
+     `ReplaySlotBaseTable[$0727] + $0728` into `$072E` and sets `$0726` to `$FF`.
+  4. `OpenHallOfFameHolesScreen` passes `$072E` to `InitializeHoleReplay` only when
+     the slot list exits with bit 0 of `$0726` set.
+
+  `STUB_REPLAY_HEADER_READ_PATCH` turns the copy at `$B69A` into `LDA #$FF`, so
+  every slot reads as empty and step 3 always rejects it. The slot list's only other
+  exit, B, stores `$F0`, which has bit 0 clear. No fixed-bank code touches `$0726`,
+  so nothing that runs inside the slot loop can set it either. The saved SRAM
+  contents never matter, because the stubbed read never looks at them. Neither the
+  relocated terrain at `$107E` nor anything else placed in `$0F9C`-`$107D` can be
+  read as replay data. To check this live, set a breakpoint on PC `$F6CE`, open Hall
+  of Fame -> Holes and press A on every slot of every category: each press should
+  buzz and the breakpoint should never fire.
 
 ## Known Free Space
 
@@ -244,8 +276,7 @@ catch these; only 4 real hits survived, all in the fixed bank:
   other spot ($EED5) for an adjacent-tile check too, so patching the shared entry
   point / its two `ADC #imm` sites covers all callers. Not documented anywhere else in
   the codebase or `docs/jp_extraction.md` - genuinely new for this effort (distinct
-  from the terrain *attribute* streaming work in `attr_streaming.py`, which touches
-  `LE451` too but for a separate attribute buffer, not raw terrain tiles).
+  from the attribute buffer, which `LE451` also reads - see "Attribute Buffer" below).
 
 Not yet checked: whether anything else reads/writes terrain tiles via a precomputed
 address table (rather than constructing the address at the point of use the way all
@@ -265,7 +296,7 @@ missed - a wrong address there fails loud, not silent.
 New terrain base: greens stays fixed at CPU `$75A6`; keeping terrain's own *end*
 address unchanged there too and only extending backward to fit 1,320 bytes (60 rows)
 gives a new base of `$75A6 - 1,320 = $707E` (WRAM `$107E`) - inside the reclaimed
-region, using 264 of its 490 bytes and leaving the 226-byte margin already noted above.
+region, using 264 of its 490 bytes.
 `DecompressGreen` and everything after it needs no changes at all.
 
 All 4 sites patched (lo `$86`->`$7E`, hi `$71`->`$70` everywhere, plus the
@@ -281,6 +312,42 @@ decode loop (stops when compressed input is exhausted, via `CompressedDataPtr` v
 `PpuWriteAddr`) and its vertical-fill pass (stops by comparing its row pointer against
 wherever `SramPtr` ended up after pass one) are already fully dynamic on the actual
 decompressed length, not hardcoded to the old 1,056-byte/48-row size.
+
+## Attribute Buffer
+
+Vanilla copies each hole's attribute bytes out of its terrain bank into `TerrainAttrs`
+at internal RAM `$0533`-`$057A` when the hole loads: `LoadTerrainAndAttrs` runs
+`LDY #$47` / `LDA ($50),Y` / `STA $0533,Y` / `DEY` / `BPL` at `$DB96`. Each attribute
+row is 6 bytes and covers 4 terrain rows, so those 72 bytes hold 48 rows, and a 60-row
+hole needs 90. The buffer can't grow in place: the 11 bytes after it are unlabelled and
+`SwingPhaseState` sits at `$0586`.
+
+`golf/core/patches/wram_expansion/relocate_attr_buffer.py` moves it to WRAM
+`$0F9C`-`$0FF5` (CPU `$6F9C`-`$6FF5`), the bottom of the gap left before the relocated
+terrain buffer, and copies 90 bytes. A shorter hole's copy picks up the next hole's data
+past its own, which is never read back - vanilla's fixed 72-byte copy does the same.
+`find-refs '0533' --type ram` finds five direct references, all `abs,Y` in the fixed bank,
+and each gets its operand changed with no length change:
+
+| Site | Routine | Instruction |
+|---|---|---|
+| `$DB96` | `LoadTerrainAndAttrs` | `LDY #$47` -> `LDY #$59` |
+| `$DB9A` | `LoadTerrainAndAttrs` | `STA $0533,Y` -> `STA $6F9C,Y` |
+| `$E4A7`, `$E4B7`, `$E4D9` | `LE451` windowing | `LDA $0533,Y` -> `LDA $6F9C,Y` |
+| `$EF04` | `LEED5` ball lie | `LDA $0533,Y` -> `LDA $6F9C,Y` |
+
+The buffer is read from RAM rather than streamed out of the terrain bank because
+`LEED5` sits under a hot loop: bank 9 `$8848` probes a 64 x 20 grid for the pre-swing
+perspective view, 1,280 calls in a row. Reading from the terrain bank there takes two
+bank switches per call, and the NMI handler skips its music tick whenever it lands
+during one (`LDA BankSwitchLock` / `BNE` at `$D2EB`).
+
+Measured in Mesen with a breakpoint at `$D2ED` conditioned on `A != 0` (the tick being
+skipped), across the switch from the overview to the perspective view: vanilla hits it
+0-1 times, a ROM that streamed the attributes from the terrain bank (the retired
+`attr_streaming` patch) about 20 times, and a randomizer ROM with this buffer 0-1 times.
+The 20 dropped ticks were an audible stutter in the music during that transition, heard
+most clearly on the US course's track; vanilla and this buffer have none.
 
 ## Ball-Position Probe (`$EDEA`)
 
