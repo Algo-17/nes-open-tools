@@ -38,6 +38,11 @@ in this package.
 - A route a script fetches answers a refusal as JSON, `{"error": reason, "values": {...}}`,
   and the script picks the notice for `error`. A missing seed on a path ending `.json` or
   `.ips` is a JSON 404 rather than the not-found page.
+- An unhandled exception renders `server_error.html` with a 500, showing the request id so
+  a player can quote it; on a path ending `.json` or `.ips` it stays Starlette's plain
+  text. The timing middleware logs the traceback before the handler runs, and if the page
+  itself fails to render, as it would with the database down, the plain text goes out
+  instead.
 - `create_app`'s timing middleware is added last, so it wraps every other middleware and
   times the whole server. It mints the request id, puts a `Sample` on
   `request.state.sample` and hands it to `app.state.timings` when the response is done.
@@ -212,7 +217,7 @@ strings catalog.
   Proper nouns and data are not strings: ROM titles, hole ids, magic words.
 - The catalog is the TOML files under `server/strings/`: `common.toml` for the elements on
   every page (`base.html`), and one file per template named for it - `home.toml`,
-  `rom.toml`, `generate.toml`, `seed.toml`, `me.toml`, `not_found.toml`, `sign_in_failed.toml`,
+  `rom.toml`, `generate.toml`, `seed.toml`, `me.toml`, `not_found.toml`, `server_error.toml`, `sign_in_failed.toml`,
   `round.toml`, `scan_rejected.toml`, `round_voided.toml`. Every file under the
   directory is loaded and merged, subdirectories included. Entries carry their full dotted
   key (`[home.about]`), so a file name is organization only and a key still greps to its

@@ -10,7 +10,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -306,6 +312,33 @@ def create_app(
                 request, "not_found.html", {"page": None}, status_code=404
             )
         return await http_exception_handler(request, exc)
+
+    @app.exception_handler(Exception)
+    async def server_error(request: Request, exc: Exception) -> Response:
+        """The page for an unhandled exception. The timing middleware has already logged it.
+
+        Starlette re-raises the exception after sending this, so the server still sees it.
+        A machine path keeps Starlette's plain text, which its script reports by status.
+        If the page itself fails, as it would with the database down, so does this: the
+        plain-text default goes out instead.
+        """
+        sample = getattr(request.state, "sample", None)
+        request_ref = sample.request_id if sample is not None else ""
+        headers = {"X-Request-Id": request_ref} if request_ref else None
+        if not request.url.path.endswith(MACHINE_SUFFIXES):
+            try:
+                return templates.TemplateResponse(
+                    request,
+                    "server_error.html",
+                    {"page": None, "request_id": request_ref},
+                    status_code=500,
+                    headers=headers,
+                )
+            except Exception:
+                log.exception("the server error page failed to render")
+        return PlainTextResponse(
+            "Internal Server Error", status_code=500, headers=headers
+        )
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):

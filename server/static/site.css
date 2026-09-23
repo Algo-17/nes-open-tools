@@ -22,6 +22,15 @@ header nav ul:first-of-type {
   margin-right: auto;
 }
 
+/* The site name is the link home, looking like plain text in every link state. Pico's
+   nav padding and negative margin still apply, so it keeps its place and focus ring. It
+   may wrap on a narrow phone, unlike the other links. */
+header nav a.brand {
+  color: inherit;
+  text-decoration: none;
+  white-space: normal;
+}
+
 header nav a,
 header nav summary {
   white-space: nowrap;

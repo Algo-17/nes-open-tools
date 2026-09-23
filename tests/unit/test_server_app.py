@@ -59,6 +59,20 @@ class PoolTooSmall(FakeBuilder):
         raise GenerationError("no fill")
 
 
+class BrokenGenerate(FakeBuilder):
+    """A builder with a bug that generating a seed runs into."""
+
+    def generate(self, settings):
+        raise RuntimeError("bug")
+
+
+class BrokenFinish(FakeBuilder):
+    """A builder with a bug that finishing a download runs into."""
+
+    def finish(self, manifest, unfinished_ips, options, credentials=None):
+        raise RuntimeError("bug")
+
+
 @pytest.fixture
 def fake_builder(catalog, curation, tmp_path):
     return FakeBuilder(catalog, curation, HoleStore(), tmp_path / "unused.nes")
@@ -146,6 +160,13 @@ def test_home_links_to_rom_setup_and_generate(client):
     assert 'href="/generate"' in response.text
     assert 'href="/rangefinder"' in response.text
     assert "nav.pages" not in response.text
+
+
+def test_the_site_name_is_the_link_home(client):
+    home = client.get("/").text
+    assert re.search(r'<a href="/"\s+class="brand"\s+aria-current="page">', home)
+    rom = client.get("/rom").text
+    assert re.search(r'<a href="/"\s+class="brand"\s*>', rom)
 
 
 def test_player_facing_pages_show_the_affiliation_footer(client):
@@ -526,6 +547,34 @@ def post_download(
         **(ALL_HASHES if hashes is None else hashes),
     }
     return client.post(f"/h/{seed_id}/patch.ips", data=data)
+
+
+def broken_client(builder: SeedBuilder) -> TestClient:
+    """A client that answers an unhandled exception with the 500 instead of raising it."""
+    app = create_app(Config(database=":memory:"), strings=UNWRITTEN, builder=builder)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_an_unhandled_error_renders_the_server_error_page(catalog, curation, tmp_path):
+    builder = BrokenGenerate(catalog, curation, HoleStore(), tmp_path / "unused.nes")
+    with broken_client(builder) as test_client:
+        response = post_generate(test_client)
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/html")
+    assert "server_error.heading" in response.text
+    request_ref = response.headers["x-request-id"]
+    assert f"server_error.reference request_id={request_ref}" in response.text
+
+
+def test_an_unhandled_error_on_a_machine_path_stays_plain_text(
+    catalog, curation, tmp_path
+):
+    builder = BrokenFinish(catalog, curation, HoleStore(), tmp_path / "unused.nes")
+    with broken_client(builder) as test_client:
+        response = post_download(test_client, generate_seed(test_client))
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("text/plain")
+    assert response.headers["x-request-id"]
 
 
 def test_the_seed_page_offers_the_download_form(client):

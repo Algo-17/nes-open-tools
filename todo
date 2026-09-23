@@ -7,16 +7,11 @@ V2 todos:
 * Configuration backups to pw manager
 * robots.txt
 * Configure rDNS (reverse DNS)?
-* Localize/prettyfy timestamps?
 * Full horizontal scorecards on Seeds page's "Completed Rounds" table
 * Version numbers somewhere on site
 * Changelog
-* Anchor tag to seed results? collapse spoiler log/course details by default? idk
-* server metrics, like response times, etc.
 * Expand SRAM defaults on randomizer site (currently missing Enable BGM and more)
-* Integrate green detail shortcut patch
 * Sentry
-* Styled 500 page
 * healthchecks.io integration for litestream
 
 Eventually:

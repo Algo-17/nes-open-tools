@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ t_plain("server_error.page_title") }}{% endblock %}
+{% block content %}
+  <hgroup>
+    <h1>{{ t("server_error.heading") }}</h1>
+    <p>{{ t("server_error.body") }}</p>
+  </hgroup>
+  {% if request_id %}
+    <p>
+      <small>{{ t("server_error.reference", request_id=request_id) }}</small>
+    </p>
+  {% endif %}
+{% endblock %}

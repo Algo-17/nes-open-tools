@@ -15,12 +15,8 @@ note = "plain: browser tab title; default for pages without their own"
 text = "NES Open Randomizer"
 
 [nav.brand]
-note = "site name; left end of the nav bar, every page"
+note = "site name; left end of the nav bar, every page; also the link to the home page"
 text = "NES Open Tournament Golf Randomizer"
-
-[nav.home]
-note = "nav link to the home page"
-text = "Home"
 
 [nav.rom]
 note = "nav link to ROM setup"
@@ -28,7 +24,7 @@ text = "ROM Setup"
 
 [nav.generate]
 note = "nav link to the seed settings form"
-text = "Generate Game"
+text = "Roll Seed"
 
 [nav.rangefinder]
 note = "nav link to the course distance measuring tool"

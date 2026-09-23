@@ -18,12 +18,13 @@
     <header class="container">
       <nav>
         <ul>
-          <li><strong>{{ t("nav.brand") }}</strong></li>
+          <li>
+            <a href="/"
+               class="brand"
+               {{ current(page=="home") }}><strong>{{ t("nav.brand") }}</strong></a>
+          </li>
         </ul>
         <ul>
-          <li>
-            <a href="/"{{ current(page=="home") }}>{{ t("nav.home") }}</a>
-          </li>
           <li>
             <a href="/rom"{{ current(page=="rom") }}>{{ t("nav.rom") }}</a>
           </li>

@@ -1,0 +1,18 @@
+# Server-error page strings (server_error.html), shown for an unhandled exception.
+# Format: see common.toml, and server/CLAUDE.md "Player-facing text".
+
+[server_error.page_title]
+note = "plain: browser tab title; the server failed; site name as on the not-found page"
+text = "Server Error - NES Open Randomizer"
+
+[server_error.heading]
+note = "server error heading; something went wrong on the site's end, not the player's"
+text = "Server Error"
+
+[server_error.body]
+note = "the site failed while handling the request; trying again may work; nothing the player did caused it; link home (/)"
+text = "The site encountered an error handling the request.  Nothing you did caused this.  Trying again may fix it.  It also may not fix it."
+
+[server_error.reference]
+note = "small print under the body; {request_id} a short hex code naming this request in the server's logs, to quote when reporting the problem"
+text = "If you report this problem, please include request id: {request_id}"
