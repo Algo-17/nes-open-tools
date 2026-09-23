@@ -48,6 +48,7 @@ golf-expand-dict = "tools.expand_dict:main"
 # Developer tooling
 golf-biome = "tools.dev.biome:main"
 golf-check = "tools.dev.check:main"
+golf-adr = "tools.dev.adr:main"
 
 # ROM patches
 golf-patch = "tools.patch:main"

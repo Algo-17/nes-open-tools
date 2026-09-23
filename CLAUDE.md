@@ -17,6 +17,10 @@ A toolset for reverse engineering, editing and patching the NES Open Tournament 
 - **Commands**: every CLI tool is indexed in `README.md`; each tool's `--help` is its
   full reference. Run them with `uv run <command>`.
 - **Docs**: `docs/README.md` indexes the design and reverse-engineering notes.
+- **Decisions**: `docs/adr/` records why things are the way they are, what was turned
+  down, and when to revisit. Check the index in `docs/adr/README.md` for your area before
+  changing a design; `golf-adr` creates records (Claude drafts them as `proposed`, with
+  `--drafted-by Claude`). Code cites a record as "ADR" and its four-digit number.
 - **Area-specific guidance** loads from nested files when you work there:
   `editor/CLAUDE.md` (editor architecture, adding editor tools), `golf/qr/CLAUDE.md`
   (the QR oracle and its 6502 port) and `server/CLAUDE.md` (the randomizer website).
@@ -37,6 +41,7 @@ A toolset for reverse engineering, editing and patching the NES Open Tournament 
   - `formats/` - hole data model and JSON serialization (see `docs/course_data.md`)
   - `rendering/` - PIL rendering for static images
   - `qr/` - scorecard QR reference implementation and 6502 port
+  - `adr.py` - architecture decision records: parsing, checks, the index, new records
 - `editor/` - the course editor
 - `server/` - the randomizer website (FastAPI); conventions in `server/CLAUDE.md`, design in
   `docs/randomizer_devplan.md`
@@ -140,6 +145,8 @@ The indexes and pointers above only stay useful if changes keep them current:
 - `test_tools_layering.py` - nothing imports from `tools/`, and `tools/archive/` has no entry points
 - `test_import_order.py` - every module in `golf/`, `server/`, `editor/` and `tools/`
   imports cleanly in a fresh interpreter
+- `test_adrs.py` - every record in `docs/adr/` is well formed, supersession links agree,
+  the index is current, and every ADR citation names a record that exists
 
 ### Linting, formatting and type checking
 

@@ -65,7 +65,7 @@ full reference for its options.
 - **tools/** - command-line entry points, grouped into `data/` (regenerates `data/`
   files), `research/`, `art/`, `music/` and `qr/`; course and patch tools sit at the top
   level; `archive/` holds retired one-off scripts
-- **docs/** - design and reverse-engineering notes; start at `docs/README.md`
+- **docs/** - design and reverse-engineering notes; start at `docs/README.md` and `docs/documentation.md`.
 - **data/** - checked-in tables, tilesets, sprites and exports the tools and editor load
 - **courses/** - course JSON: the vanilla courses `golf-rehydrate` dumps (not committed;
   the directories are kept with `.gitkeep` markers) and any of your own
@@ -115,6 +115,7 @@ Build a standalone editor executable with `uv run pyinstaller run_editor.spec`.
 |---------|-------------|
 | `golf-check [--fix]` | Run every linter, formatter check and type checker (ruff, pyright, djLint, Biome); `--fix` formats and applies safe fixes |
 | `golf-biome <biome args>` | Run the pinned Biome JS/CSS linter and formatter, downloading and hash-checking it on first use |
+| `golf-adr new/status/index/check` | Create architecture decision records, change their status and regenerate the index in `docs/adr/README.md` |
 
 ### ROM patches
 
