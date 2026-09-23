@@ -72,6 +72,7 @@ from .views import (
     generate_options,
     round_view,
     seed_view,
+    timestamp,
     voided_round_view,
 )
 
@@ -284,6 +285,7 @@ def create_app(
     templates.env.globals["t"] = strings.html
     templates.env.globals["t_plain"] = strings.plain
     templates.env.globals["static_url"] = StaticVersions(STATIC_DIR).url
+    templates.env.filters["timestamp"] = timestamp
     app.mount("/static", CachedStaticFiles(directory=STATIC_DIR), name="static")
     # Not checked at startup: golf-site refuses to run without the renders, and tests
     # build apps on a fresh clone that has none.

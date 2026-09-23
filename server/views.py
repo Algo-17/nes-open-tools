@@ -5,6 +5,9 @@ data. The templates put them into strings from `server/strings/`.
 """
 
 from dataclasses import dataclass
+from datetime import datetime
+
+from markupsafe import Markup
 
 from golf.core import jp_rom_utils, rom_utils
 from golf.core.patches.sram_defaults import BAG_SIZE, NAME_LENGTH
@@ -86,6 +89,18 @@ class HoleView:
 
 #: every downloaded ROM's file name starts with this, so tools can recognise a randomizer ROM
 DOWNLOAD_PREFIX = "notgr"
+
+
+def timestamp(stamp: str) -> Markup:
+    """A stored UTC time as a `<time>` element, for the `timestamp` template filter.
+
+    Its text is the UTC minute; `server/static/localtime.js` replaces it with the viewer's
+    local time in their locale's format, and keeps the UTC text as the hover title.
+    """
+    when = datetime.fromisoformat(stamp)
+    return Markup('<time datetime="{}">{} UTC</time>').format(
+        stamp, when.strftime("%Y-%m-%d %H:%M")
+    )
 
 
 def download_stem(row: SeedRow) -> str:

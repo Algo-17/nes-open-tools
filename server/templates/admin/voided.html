@@ -29,8 +29,8 @@
               <td>{{ admin.slot_label(round.slot) }}</td>
               <td class="num">{{ round.total_strokes }}</td>
               <td class="num">{{ round.total_putts }}</td>
-              <td>{{ round.received_at }}</td>
-              <td>{{ round.voided_at }}{% if round.voided_by_name %} by {{ round.voided_by_name }}{% endif %}</td>
+              <td>{{ round.received_at|timestamp }}</td>
+              <td>{{ round.voided_at|timestamp }}{% if round.voided_by_name %} by {{ round.voided_by_name }}{% endif %}</td>
               <td>{{ round.void_note or "" }}{% if round.flagged %} {{ admin.flag_cell(round) }}{% endif %}</td>
               <td>
                 {% if round.slot_taken %}

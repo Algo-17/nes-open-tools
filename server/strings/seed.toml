@@ -6,7 +6,7 @@ note = "plain: browser tab title, seed page; {words} the seed's three magic word
 text = "{words} - NES Open Randomizer"
 
 [seed.tagline]
-note = "line under the magic words h1; same words show on the game's title menu and scorecard; {id} the seed's id, {created} its UTC creation time (ISO 8601)"
+note = "line under the magic words h1; same words show on the game's title menu and scorecard; {id} the seed's id, {created} its creation time, shown in the viewer's local time"
 text = "Created: {created}"
 
 # Download form. The downloaded file's name is data, not a string (server/views.py).
@@ -219,7 +219,7 @@ note = "rounds table column header; total putts for the round"
 text = "Putts"
 
 [seed.rounds.received]
-note = "rounds table column header; when the scan was recorded, UTC ISO 8601"
+note = "rounds table column header; when the scan was recorded, shown in the viewer's local time"
 text = "Submitted"
 
 [seed.rounds.flagged]

@@ -153,13 +153,20 @@ in this package.
   body; its template supplies the top-level heading, so its body starts below h1.
 - JavaScript only where the browser must act: hashing and storing ROMs
   (`server/static/rom.js`) and fetching and applying a seed's IPS
-  (`server/static/download.js`). Both load `server/static/romstore.js` first, which holds
+  (`server/static/download.js`), and showing timestamps in the viewer's time zone
+  (`server/static/localtime.js`, below). The first two load `server/static/romstore.js` first, which holds
   the ROM store and `makeT`. Plain scripts, no build step, no frameworks. Everything else is
   a form or a link.
   The one exception is `round.html`'s inline `history.replaceState` line, which drops
   the `?recorded` marker `/s/` redirects with once the page has shown its confirmation, so
   a reload or a copied link is the plain permalink. It carries no English and no state, and
   without it the page still renders correctly with the marker visible.
+- Timestamps are stored as UTC ISO 8601 text and shown through the `timestamp` filter
+  (`server/views.py`), never printed raw. It renders a `<time>` element holding the UTC
+  minute, and `server/static/localtime.js`, which `base.html` loads on every page, rewrites
+  its text with `Intl.DateTimeFormat` into the viewer's time zone and locale, keeping the
+  UTC text as the title. A timestamp passed into `t()` goes through the filter too; its
+  `Markup` passes through unescaped.
 - The ROM store is IndexedDB database `golf-randomizer`, object store `roms`, records
   `{id, sha1, bytes}` keyed by catalog ROM id. It holds only files whose SHA-1 matched.
 - A downloaded ROM is named `notgr_par<par>_<id>.nes` by `download_stem` in

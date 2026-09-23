@@ -80,7 +80,7 @@
             <td>{{ slot_label(round.slot) }}</td>
             <td class="num">{{ round.total_strokes }}</td>
             <td class="num">{{ round.total_putts }}</td>
-            <td>{{ round.received_at }}</td>
+            <td>{{ round.received_at|timestamp }}</td>
             <td>{{ flag_cell(round) }}</td>
           </tr>
         {% endfor %}
@@ -115,7 +115,7 @@
             {% if show_creator %}<td>{% if seed.creator_id is not none %}<a href="/admin/users/{{ seed.creator_id }}">{{ seed.creator_name }}</a>{% endif %}</td>{% endif %}
             <td class="num">{{ seed.entries }}</td>
             <td class="num">{{ seed.rounds }}</td>
-            <td>{{ seed.created_at }}</td>
+            <td>{{ seed.created_at|timestamp }}</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -143,8 +143,8 @@
             {% if show_player %}<td><a href="/admin/users/{{ entry.user_id }}">{{ entry.user_name }}</a></td>{% endif %}
             <td>{{ entry.player_name }}</td>
             <td>{{ entry.clubs|join(" ") }}</td>
-            <td>{{ entry.created_at }}</td>
-            <td>{{ entry.updated_at }}</td>
+            <td>{{ entry.created_at|timestamp }}</td>
+            <td>{{ entry.updated_at|timestamp }}</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -177,7 +177,7 @@
       <tbody>
         {% for entry in history %}
           <tr>
-            <td>{{ entry.created_at }}</td>
+            <td>{{ entry.created_at|timestamp }}</td>
             <td>{{ action_label(entry) }}</td>
             <td><a href="/admin/users/{{ entry.admin_id }}">{{ entry.admin_name }}</a></td>
             <td>{{ entry.note or "" }}</td>
@@ -205,7 +205,7 @@
         {% for listing in listings %}
           {% set entry = listing.action %}
           <tr>
-            <td>{{ entry.created_at }}</td>
+            <td>{{ entry.created_at|timestamp }}</td>
             <td>{{ action_label(entry) }}</td>
             <td>
               {% if listing.target.path %}<a href="{{ listing.target.path }}">{{ listing.target.label }}</a>

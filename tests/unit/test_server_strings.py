@@ -79,6 +79,7 @@ def test_every_catalog_entry_is_used():
 SCRIPT_PREFIXES = {
     "download.js": DOWNLOAD_SCRIPT_STRINGS,
     "rom.js": ROM_SCRIPT_STRINGS,
+    "localtime.js": None,
     "romstore.js": None,
     "rangefinder/app.js": RANGEFINDER_SCRIPT_STRINGS,
     "rangefinder/green-modal.js": None,

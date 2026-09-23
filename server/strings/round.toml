@@ -15,11 +15,11 @@ note = "h1, the default heading for the round's permalink: a rescan (which chang
 text = "Completed Round"
 
 [round.player_one]
-note = "line under the h1, round played as player 1; {name} the player's Discord display name, {received} when it was recorded, UTC ISO 8601"
+note = "line under the h1, round played as player 1; {name} the player's Discord display name, {received} when it was recorded, shown in the viewer's local time"
 text = "{name} | {received}"
 
 [round.player_two]
-note = "line under the h1, round played as player 2 on the player's ROM, counted toward their entry; {name} the ROM owner's Discord display name, {received} when it was recorded, UTC ISO 8601"
+note = "line under the h1, round played as player 2 on the player's ROM, counted toward their entry; {name} the ROM owner's Discord display name, {received} when it was recorded, shown in the viewer's local time"
 text = "teammate | {received}"
 
 [round.seed]

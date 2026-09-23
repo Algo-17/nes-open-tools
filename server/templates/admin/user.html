@@ -24,11 +24,11 @@
           </tr>
           <tr>
             <th scope="row">First sign-in</th>
-            <td>{{ account.created_at }}</td>
+            <td>{{ account.created_at|timestamp }}</td>
           </tr>
           <tr>
             <th scope="row">Last sign-in</th>
-            <td>{{ account.last_login }}</td>
+            <td>{{ account.last_login|timestamp }}</td>
           </tr>
         </tbody>
       </table>

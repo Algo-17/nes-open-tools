@@ -26,7 +26,7 @@
               <td><code>{{ '%08x' % account.player_id }}</code></td>
               <td class="num">{{ listing_user.entries }}</td>
               <td class="num">{{ listing_user.rounds }}</td>
-              <td>{{ account.last_login }}</td>
+              <td>{{ account.last_login|timestamp }}</td>
             </tr>
           {% endfor %}
         </tbody>

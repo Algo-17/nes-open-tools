@@ -27,7 +27,7 @@
                 <td class="num">{{ round.par }}</td>
                 <td class="num"><a href="/r/{{ round.public_id }}">{{ round.total_strokes }}</a>{% if round.flagged %} {{ t("me.rounds.flagged") }}{% endif %}</td>
                 <td class="num">{{ round.total_putts }}</td>
-                <td>{{ round.received_at }}</td>
+                <td>{{ round.received_at|timestamp }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -60,7 +60,7 @@
                 <td class="num">{{ entry.par }}</td>
                 <td>{{ entry.player_name }}</td>
                 <td>{{ entry.clubs|join(" ") }}</td>
-                <td>{{ entry.created_at }}</td>
+                <td>{{ entry.created_at|timestamp }}</td>
               </tr>
             {% endfor %}
           </tbody>

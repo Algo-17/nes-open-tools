@@ -7,7 +7,7 @@
 
   <p>
     {{ metrics.samples }} requests in the last {{ metrics.days }} days, since
-    {{ metrics.since }}. Slowest route first. Percentiles are computed from the raw
+    {{ metrics.since|timestamp }}. Slowest route first. Percentiles are computed from the raw
     samples over this window, so they are exact for it.
   </p>
 

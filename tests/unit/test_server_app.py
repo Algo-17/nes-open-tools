@@ -363,6 +363,17 @@ def test_the_seed_page_shows_the_course(client, fake_builder, catalog):
     assert "Mario Open Golf (Japan)" in page or "NES Open Tournament Golf (USA)" in page
 
 
+def test_the_seed_page_shows_its_creation_time_as_a_time_element(client):
+    seed_id = generate_seed(client)
+    with app_state(client).db.transaction() as conn:
+        created = conn.execute(
+            "SELECT created_at FROM seeds WHERE id = ?", (seed_id,)
+        ).fetchone()[0]
+    page = client.get(f"/h/{seed_id}").text
+    assert f'<time datetime="{created}">' in page
+    assert "localtime.js" in page
+
+
 def test_the_seed_page_starts_its_hole_table_and_details_collapsed(unwritten_client):
     seed_id = generate_seed(unwritten_client)
     page = unwritten_client.get(f"/h/{seed_id}").text

@@ -22,7 +22,7 @@
           </tr>
           <tr>
             <th scope="row">Created</th>
-            <td>{{ seed.created_at }}</td>
+            <td>{{ seed.created_at|timestamp }}</td>
           </tr>
           <tr><th scope="row">Creator</th><td>{% if detail.creator %}<a href="/admin/users/{{ detail.creator.id }}">{{ detail.creator.display_name }}</a>{% else %}signed out{% endif %}</td></tr>
           <tr>
@@ -43,7 +43,7 @@
           </tr>
           <tr>
             <th scope="row">Status</th>
-            <td>{% if seed.withdrawn %}<del>withdrawn</del> at {{ seed.withdrawn_at }}{% else %}active{% endif %}</td>
+            <td>{% if seed.withdrawn %}<del>withdrawn</del> at {{ seed.withdrawn_at|timestamp }}{% else %}active{% endif %}</td>
           </tr>
           <tr>
             <th scope="row">Catalog version</th>

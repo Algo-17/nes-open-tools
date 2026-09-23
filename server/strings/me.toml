@@ -30,7 +30,7 @@ note = "entries table column header; club labels chosen at the latest download, 
 text = "Club Bag"
 
 [me.entries.entered]
-note = "entries table column header; when the player first downloaded the seed signed in, UTC ISO 8601"
+note = "entries table column header; when the player first downloaded the seed signed in, shown in the viewer's local time"
 text = "Downloaded"
 
 [me.entries.none]
@@ -60,7 +60,7 @@ note = "rounds table column header; total putts for the round"
 text = "Putts"
 
 [me.rounds.received]
-note = "rounds table column header; when the scan was recorded, UTC ISO 8601"
+note = "rounds table column header; when the scan was recorded, shown in the viewer's local time"
 text = "Submitted"
 
 [me.rounds.flagged]

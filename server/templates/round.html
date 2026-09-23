@@ -51,8 +51,8 @@
   <hgroup>
     <h1>{% if round.recorded %}{{ t("round.heading_recorded") }}{% else %}{{ t("round.heading") }}{% endif %}</h1>
     <p>
-      {% if round.slot == 1 %}{{ t("round.player_two", name=round.player_name, received=round.received_at) }}
-{% else %}{{ t("round.player_one", name=round.player_name, received=round.received_at) }}{% endif %}
+      {% if round.slot == 1 %}{{ t("round.player_two", name=round.player_name, received=round.received_at|timestamp) }}
+{% else %}{{ t("round.player_one", name=round.player_name, received=round.received_at|timestamp) }}{% endif %}
   </p>
   </hgroup>
 
