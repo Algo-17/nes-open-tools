@@ -120,6 +120,28 @@ def test_generate_submits_the_form_and_captures_the_seed_page(
         assert (tmp_path / name).read_bytes().startswith(PNG_SIGNATURE)
 
 
+def test_expand_captures_the_seed_page_again_with_its_sections_open(
+    vanilla_courses, vanilla_jp_courses, tmp_path
+):
+    completed = run(
+        "/generate",
+        "--generate",
+        "--expand",
+        "--viewports",
+        "phone",
+        "--schemes",
+        "light",
+        "-o",
+        tmp_path,
+    )
+    assert completed.returncode == 0, completed.stderr
+    for name in (
+        "generate-phone-light-expanded.png",
+        "generate-phone-light-seed-expanded.png",
+    ):
+        assert (tmp_path / name).read_bytes().startswith(PNG_SIGNATURE)
+
+
 def test_generate_with_roms_captures_the_download_form_ready(
     vanilla_courses, vanilla_jp_courses, tmp_path
 ):

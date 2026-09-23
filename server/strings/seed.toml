@@ -161,7 +161,7 @@ The server couldn't build the ROM patch right now.  Try again later.
 """
 
 [seed.holes.heading]
-note = "h2 over the hole table"
+note = "h2 label of the collapsed section holding the hole table"
 text = "Course Overview"
 
 [seed.holes.number]
@@ -231,7 +231,7 @@ note = "shown instead of the rounds table when no round has been submitted for t
 text = "Nobody's submitted a score for this seed yet."
 
 [seed.details.heading]
-note = "h2 over the seed's settings table"
+note = "h2 label of the collapsed section holding the seed's settings table"
 text = "Details"
 
 [seed.details.music]

@@ -11,7 +11,8 @@ printed; that builds a real seed, so it needs the vanilla US ROM in GOLF_ROM_DIR
 repository root by default). With --rom as well, the files are loaded on the ROM setup page
 first, so the seed page shows the download form ready. With --login, each browser signs in
 through the development login bypass before capturing, so pages show the signed-in
-header. Browser console
+header. With --expand, each capture that has collapsed sections in the page body (such
+as the seed page's) is repeated with them all opened. Browser console
 errors and page errors are printed and make the command exit 1.
 
 Needs the dev dependencies and a Playwright browser (uv run playwright install chromium).
@@ -35,6 +36,7 @@ examples:
   golf-site-screenshot /rom --rom nes_open_us=nes_open_us.nes --rom mario_open_jp=guest.nes -o shots
   golf-site-screenshot /generate --generate -o shots
   golf-site-screenshot / /generate --login alice -o shots
+  golf-site-screenshot /generate --generate --expand -o shots
 """
 
 
@@ -83,6 +85,24 @@ def load_roms(
             continue
         page.set_input_files(f"{card} input[type=file]", str(file))
         settle(page)
+
+
+def capture_expanded(page, name: str, out_dir: Path, written: list[Path]) -> None:
+    """Open the body's collapsed sections, capture as <name>-expanded.png, close them again."""
+    opened = page.eval_on_selector_all(
+        "main details:not([open])",
+        "sections => sections.map(s => { s.open = true; s.dataset.shotOpened = ''; }).length",
+    )
+    if not opened:
+        return
+    shot = out_dir / f"{name}-expanded.png"
+    # Pico turns the summary's chevron with a transition; finish it before capturing.
+    page.screenshot(path=shot, full_page=True, animations="disabled")
+    written.append(shot)
+    page.eval_on_selector_all(
+        "main details[data-shot-opened]",
+        "sections => sections.forEach(s => { s.open = false; delete s.dataset.shotOpened; })",
+    )
 
 
 def card_states(page) -> str:
@@ -162,6 +182,8 @@ def capture(base: str, args: argparse.Namespace) -> tuple[list[Path], list[str]]
                             shot = args.out_dir / f"{name}.png"
                             page.screenshot(path=shot, full_page=True)
                             written.append(shot)
+                            if args.expand:
+                                capture_expanded(page, name, args.out_dir, written)
 
                             if args.rom and page.locator("article.rom").count():
                                 load_roms(page, args.rom, label, problems)
@@ -199,6 +221,10 @@ def capture(base: str, args: argparse.Namespace) -> tuple[list[Path], list[str]]
                                 shot = args.out_dir / f"{name}-seed.png"
                                 page.screenshot(path=shot, full_page=True)
                                 written.append(shot)
+                                if args.expand:
+                                    capture_expanded(
+                                        page, f"{name}-seed", args.out_dir, written
+                                    )
                                 download = page.get_attribute(
                                     "article.download", "data-state"
                                 )
@@ -261,6 +287,12 @@ def main() -> int:
         metavar="NAME",
         help="sign each browser in as the development user NAME before capturing (turns on the login bypass, "
         "and makes NAME an admin so /admin pages capture)",
+    )
+    parser.add_argument(
+        "--expand",
+        action="store_true",
+        help="for each capture with collapsed sections in the page body, open them all and capture again "
+        "as <name>-expanded.png (the seed page as <name>-seed-expanded.png)",
     )
     args = parser.parse_args()
 

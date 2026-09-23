@@ -363,6 +363,16 @@ def test_the_seed_page_shows_the_course(client, fake_builder, catalog):
     assert "Mario Open Golf (Japan)" in page or "NES Open Tournament Golf (USA)" in page
 
 
+def test_the_seed_page_starts_its_hole_table_and_details_collapsed(unwritten_client):
+    seed_id = generate_seed(unwritten_client)
+    page = unwritten_client.get(f"/h/{seed_id}").text
+    summaries = re.findall(r"<details\s*>\s*<summary>\s*<h2>(.*?)</h2>", page, re.S)
+    assert len(summaries) == 2
+    assert "seed.holes.heading" in summaries[0]
+    assert "seed.details.heading" in summaries[1]
+    assert "<details open" not in page
+
+
 def test_the_manifest_json_is_the_stored_manifest(client, fake_builder):
     seed_id = generate_seed(client)
     response = client.get(f"/h/{seed_id}.json")

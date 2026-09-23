@@ -213,6 +213,22 @@ table.seed-details th {
   width: 40%;
 }
 
+/* Seed page sections collapsed into cards, their h2 as the summary. Flex keeps Pico's
+   chevron beside the heading rather than floated below it. */
+article.collapsible > details {
+  margin-bottom: 0;
+}
+
+article.collapsible > details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+article.collapsible > details > summary > h2 {
+  margin-bottom: 0;
+}
+
 /* Seed page download form. download.js sets data-state: checking, missing, ready,
    building, done, error or unavailable. */
 article.download form > :last-child {

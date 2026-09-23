@@ -238,7 +238,7 @@ After changing a template, `site.css` or a page script, render the pages and loo
 PNGs before reporting the change done:
 
 ```bash
-uv run golf-site-screenshot / /rom /generate --generate -o <scratchpad>/shots \
+uv run golf-site-screenshot / /rom /generate --generate --expand -o <scratchpad>/shots \
   --rom nes_open_us=nes_open_us.nes --rom mario_open_jp=mario_open_jp.nes
 ```
 
@@ -254,7 +254,10 @@ the generate form is submitted and the seed page it lands on is captured as
 ROM in `GOLF_ROM_DIR`. With `--rom` too, the ROMs are loaded before generating, so the
 download form captures ready rather than missing. With `--login NAME`, each browser signs
 in through the development bypass first, so the header captures signed in, and `NAME` is
-an admin, so `/admin` pages capture too. The tool is
+an admin, so `/admin` pages capture too. With `--expand`, every capture whose page body
+has collapsed `<details>` sections (the generate form's club rules, the seed page's hole
+table and details) is taken again with them all open, as `<name>-expanded.png` or
+`<name>-seed-expanded.png`. The tool is
 `tools/site_screenshot.py`; `tests/integration/test_site_screenshot.py` skips without a
 Playwright browser.
 
