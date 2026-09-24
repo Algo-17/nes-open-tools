@@ -411,6 +411,14 @@ table .num.strokes {
   line-height: 1;
 }
 
+/* The triangle narrows toward its apex, so even at the same overall footprint as a circle
+   or square, there's less width at the digit's position - a two-digit score needs a
+   smaller font than those shapes to stay inside the sides instead of crossing them. A
+   single digit already fits at full size, so this only applies once strokes reaches 10. */
+.score-triangle-value.wide {
+  font-size: 0.7em;
+}
+
 /* Admin pages: a row of links under the site header, and buttons that sit in a table row. */
 nav.admin-nav {
   flex-wrap: wrap;
