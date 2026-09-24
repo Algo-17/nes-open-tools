@@ -16,16 +16,16 @@
       {%- set shape = "circle" if diff < 0 else "square" -%}
       {%- set magnitude = diff | abs -%}
       {%- if magnitude == 1 -%}
-        <span class="score-mark {{ shape }} score-depth-0">{{ strokes }}</span>
+        <span class="score-mark {{ shape }} score-depth-0"><span class="score-digit">{{ strokes }}</span></span>
       {%- elif magnitude == 2 -%}
-        <span class="score-ring {{ shape }} score-depth-0"><span class="score-ring {{ shape }} score-depth-1 score-spacer"><span class="score-mark {{ shape }} score-depth-2">{{ strokes }}</span></span></span>
+        <span class="score-ring {{ shape }} score-depth-0"><span class="score-ring {{ shape }} score-depth-1 score-spacer"><span class="score-mark {{ shape }} score-depth-2"><span class="score-digit">{{ strokes }}</span></span></span></span>
       {%- elif shape == "square" -%}
         <span class="score-triangle score-depth-0">
           <svg viewBox="0 0 32 32" aria-hidden="true">
             <polygon points="16,3 30,29 2,29"></polygon>
           </svg><span class="score-triangle-value{{ ' wide' if strokes >= 10 else '' }}">{{ strokes }}</span></span>
       {%- else -%}
-        <span class="score-ring {{ shape }} score-depth-0"><span class="score-ring {{ shape }} score-depth-1"><span class="score-mark {{ shape }} score-depth-2">{{ strokes }}</span></span></span>
+        <span class="score-ring {{ shape }} score-depth-0"><span class="score-ring {{ shape }} score-depth-1"><span class="score-mark {{ shape }} score-depth-2"><span class="score-digit">{{ strokes }}</span></span></span></span>
       {%- endif -%}
     {%- endif -%}
   {%- endmacro %}

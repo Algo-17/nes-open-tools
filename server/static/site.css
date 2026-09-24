@@ -353,6 +353,21 @@ table .num.strokes {
   line-height: 1;
 }
 
+/* Even at line-height 1, the line box includes the font's room above and below the
+   digits, which is rarely even, so a centered line box leaves the digit itself about a
+   pixel high. text-box trims the box to run from the baseline to cap height, so centering
+   it centers the glyph. It only applies to a block container, hence the digit's own block
+   span inside the flex ring; the triangle's absolutely positioned value is one already.
+   Browsers without text-box support keep the untrimmed box. */
+.score-digit {
+  display: block;
+}
+
+.score-digit,
+.score-triangle-value {
+  text-box: trim-both cap alphabetic;
+}
+
 .score-depth-0 {
   width: 2rem;
   aspect-ratio: 1;

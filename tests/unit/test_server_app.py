@@ -1252,7 +1252,10 @@ def test_scanning_records_the_round_and_redirects_to_its_permalink(fake_builder)
     assert "round.heading_recorded" in page.text
     assert "round.player_one name=alice" in page.text
     assert f'href="/h/{seed_id}"' in page.text
-    assert '<span class="score-mark square score-depth-0">5</span>' in page.text
+    assert (
+        '<span class="score-mark square score-depth-0"><span class="score-digit">5</span></span>'
+        in page.text
+    )
     assert '<td class="num strokes over-par">90</td>' in page.text
 
 
@@ -1319,10 +1322,10 @@ def test_strokes_are_marked_against_par(fake_builder):
     # a 4 on every hole: a bogey square over a par 3, a birdie circle under a par 5, and
     # level par over the round
     assert page.count(
-        '<td class="num strokes over-par"><span class="score-mark square score-depth-0">4</span></td>'
+        '<td class="num strokes over-par"><span class="score-mark square score-depth-0"><span class="score-digit">4</span></span></td>'
     ) == pars.count(3)
     assert page.count(
-        '<td class="num strokes under-par"><span class="score-mark circle score-depth-0">4</span></td>'
+        '<td class="num strokes under-par"><span class="score-mark circle score-depth-0"><span class="score-digit">4</span></span></td>'
     ) == pars.count(5)
     # total par and total strokes both land on 72; only the strokes cell carries the
     # column's class
@@ -1343,12 +1346,12 @@ def test_far_under_par_gets_a_second_or_third_ring(fake_builder):
     assert page.count(
         '<span class="score-ring circle score-depth-0">'
         '<span class="score-ring circle score-depth-1 score-spacer">'
-        '<span class="score-mark circle score-depth-2">2</span></span></span>'
+        '<span class="score-mark circle score-depth-2"><span class="score-digit">2</span></span></span></span>'
     ) == pars.count(4)
     assert page.count(
         '<span class="score-ring circle score-depth-0">'
         '<span class="score-ring circle score-depth-1">'
-        '<span class="score-mark circle score-depth-2">2</span></span></span>'
+        '<span class="score-mark circle score-depth-2"><span class="score-digit">2</span></span></span></span>'
     ) == pars.count(5)
 
 
@@ -1363,7 +1366,7 @@ def test_far_over_par_gets_a_second_ring_or_a_triangle(fake_builder):
     assert page.count(
         '<span class="score-ring square score-depth-0">'
         '<span class="score-ring square score-depth-1 score-spacer">'
-        '<span class="score-mark square score-depth-2">6</span></span></span>'
+        '<span class="score-mark square score-depth-2"><span class="score-digit">6</span></span></span></span>'
     ) == pars.count(4)
     assert page.count('<span class="score-triangle score-depth-0">') == pars.count(3)
     assert page.count('<span class="score-triangle-value">6</span>') == pars.count(3)
